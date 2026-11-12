@@ -685,8 +685,33 @@ the first try; it defaults to `3`, and `1` disables automatic retries. An
 interrupted delivery is marked uncertain because the server may have accepted
 it. Check Sent mail before manually retrying an uncertain message.
 
-When replying, the quoted original is editable text inside the message body;
-there is no separate expand/collapse control in compose.
+By default, when replying, the quoted original is editable text (each line
+starting with `> `) inside the message body.
+
+**Quote marker (optional).** Turn on **Settings → Editor → Reply quote marker**, or
+set `[display] compose_reply_marker = true`, and a new reply instead contains a
+line shown as `⁅ quoted message ⁆` (the character `⁑`, like the `⁂` signature
+marker) in place of the pasted quote. When the message is previewed or sent, that
+line becomes `On <date>, <sender> wrote:` followed by the original message
+in a quote block that keeps its structure (tables, lists, links, emphasis), with a
+`> ` quoted copy in the plain-text part. Because it is a line like any other you
+can move it: put your answer above it, below it, or between its parts, or delete the
+line to send no quote at all. Scripts, styles, forms, frames, `http` and inline
+images, and tracking pixels are removed from the quote; `https` images stay, as in
+other mail clients.
+
+- `F3` (or **View or copy the quoted message** in the command palette) shows the
+  original read-only without changing your reply: `↑`/`↓` scroll, `y` copies its
+  text, `Esc` closes.
+- In that view, `e` (or **Expand the quoted message into the text**) replaces the
+  marker with the quote as ordinary editable Markdown, tables as pipe tables. It
+  is one-way: the original's formatting is no longer attached, and the marker
+  cannot be recreated. `Ctrl+Z` immediately afterwards puts it back; once you
+  type, it no longer can.
+- The original is found by the reply's `In-Reply-To` Message-ID in the local
+  cache when you preview or send. If it has left the cache, sending says so; expand
+  the quote (or delete the marker) first. A message that is not a reply cannot
+  contain the marker.
 
 The compose window expands with the terminal up to 110 columns and 48 rows,
 with the extra space available to the message editor. The header fields carry

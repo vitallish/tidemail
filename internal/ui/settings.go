@@ -93,6 +93,7 @@ const (
 	sfComposeSearchRegex
 	sfComposeWordWrap
 	sfComposePreviewServer
+	sfComposeReplyMarker
 	sfComposeSpell
 	sfSpellLang
 	sfSpellDictionary
@@ -363,6 +364,7 @@ type Settings struct {
 	composeSearchRegex      bool
 	composeWordWrap         bool
 	composePreviewServer    bool
+	composeReplyMarker      bool
 	composeSpell            bool
 	spellLangIdx            int
 	cliQuitAfterSend        bool
@@ -492,6 +494,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		composeSearchRegex:      cfg.Display.ComposeSearchRegex,
 		composeWordWrap:         cfg.Display.ComposeWordWrap,
 		composePreviewServer:    cfg.Display.ComposePreviewServer,
+		composeReplyMarker:      cfg.Display.ComposeReplyMarker,
 		composeSpell:            cfg.Display.ComposeSpell,
 		spellLangIdx:            spellLangIndex(cfg.Display.ComposeSpellLang),
 		cliQuitAfterSend:        cfg.Display.CLIQuitAfterSend,
@@ -591,6 +594,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.ComposeSearchRegex = s.composeSearchRegex
 	cfg.Display.ComposeWordWrap = s.composeWordWrap
 	cfg.Display.ComposePreviewServer = s.composePreviewServer
+	cfg.Display.ComposeReplyMarker = s.composeReplyMarker
 	cfg.Display.ComposeSpell = s.composeSpell
 	cfg.Display.ComposeSpellLang = spellLangs[s.spellLangIdx].id
 	cfg.Display.CLIQuitAfterSend = s.cliQuitAfterSend
@@ -846,7 +850,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		fields = append(fields, sfReadingWidth, sfShowHeaders, sfMarkReadOnOpen, sfMarkReadOnFocus, sfActionableLinks, sfFilterLinks, sfImages)
 		return append(fields, sfBrowser, sfConfirmQuit, sfNotifications, sfMouseSupport)
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposePreviewServer, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposePreviewServer, sfComposeReplyMarker, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1640,6 +1644,15 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 			s.setFocusedField(s.prevField())
 		}
 
+	case sfComposeReplyMarker:
+		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.composeReplyMarker = !s.composeReplyMarker
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
 	case sfComposeSearchRegex:
 		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.composeSearchRegex = !s.composeSearchRegex
@@ -2183,6 +2196,8 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addHint("Wraps compose text between words instead of mid-word. Display only; your message text is not changed.")
 		b.addToggle("Live preview server (F4)", s.composePreviewServer, sfComposePreviewServer)
 		b.addHint("F4 shows the draft in your browser and updates it as you type, served from a local port on this machine (127.0.0.1 only, secret address, stops with compose). Off: F4 writes a static file; press F4 again to refresh.")
+		b.addToggle("Reply quote marker", s.composeReplyMarker, sfComposeReplyMarker)
+		b.addHint("New replies get a \u2051 line standing for the quoted message instead of a pasted \"> \" quote. The original's formatting (tables, lists, links) is kept when sent; move it to reply above, below or between its parts, or delete it to send no quote. Off: replies start with the quote as plain text.")
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)
 		b.addHint("Shows an optional Regex toggle in compose Find. Searches stay literal until you enable it in the search bar.")
 		b.addToggle("Spell check in compose (F7)", s.composeSpell, sfComposeSpell)

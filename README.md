@@ -552,6 +552,7 @@ send_delay_seconds = 5
 send_max_attempts = 3  # total attempts; 1 disables automatic retries
 compose_vim = true
 compose_word_wrap = true  # wrap compose text between words (default); false wraps at the edge
+compose_reply_marker = false    # true: replies start with a ⁑ quote marker, resolved at send time with the original's formatting (F3 views it)
 compose_preview_server = false  # F4 preview: true serves a live page from a local port (127.0.0.1) instead of a static file
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 

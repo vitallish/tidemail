@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -134,7 +135,7 @@ func mailResult(out, errOut io.Writer, j bool, data any, code int, id, message s
 func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("send", flag.ContinueOnError)
 	fs.SetOutput(errOut)
-	var account, to, cc, bcc, subject, body, file, markdown, templateName string
+	var account, to, cc, bcc, subject, body, file, markdown, templateName, replyTo, quoteMode string
 	var attachments []string
 	var yes, now, j, dry, preview, noSignature, signature, agent, interactive, noInteractive bool
 	fs.StringVar(&account, "account", "", "stable account ID or unambiguous name")
@@ -147,6 +148,8 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	fs.StringVar(&file, "body-file", "", "body file")
 	fs.StringVar(&markdown, "markdown", "", "Markdown body file")
 	fs.StringVar(&templateName, "template", "", "fill the body from a template (see: tidemail templates list)")
+	fs.StringVar(&replyTo, "reply-to", "", "reply to a cached message (an ID from messages list, such as cache:123)")
+	fs.StringVar(&quoteMode, "quote", "marker", "with --reply-to: marker (the original's HTML at the ⁑ line), text (editable Markdown quote) or none")
 	fs.Var(stringList(&attachments), "attach", "attachment path, repeatable")
 	fs.BoolVar(&signature, "signature", true, "append configured signature")
 	fs.BoolVar(&noSignature, "no-signature", false, "omit signature")
@@ -253,6 +256,17 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 		}
 	}
 	d := db.Draft{To: to, CC: cc, BCC: bcc, Subject: subject, BodyText: body}
+	var quoteOpts []mailapp.ComposeOption
+	if replyTo != "" {
+		var code int
+		var failure *replyError
+		d, quoteOpts, failure = applyReply(d, a, cfg, agent, replyTo, quoteMode, signature && !noSignature)
+		if failure != nil {
+			code = failure.status
+			return fail(code, failure.code, failure.message)
+		}
+		to, subject, body = d.To, d.Subject, d.BodyText
+	}
 	for _, p := range attachments {
 		att, e := cliform.LoadAttachment(p)
 		if e != nil {
@@ -261,6 +275,9 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 		d.Attachments = append(d.Attachments, att)
 	}
 	auto := !noInteractive && !yes && !j && !agent && !dry && terminalIO(in, out) && (strings.TrimSpace(to) == "" || strings.TrimSpace(subject) == "" || (strings.TrimSpace(body) == "" && len(attachments) == 0))
+	if replyTo != "" && quoteMode == "marker" && (interactive || preview || auto) {
+		return fail(2, "invalid_arguments", "the interactive wizard does not resolve the quote marker; use --quote text, or pass --to, --subject and a body")
+	}
 	if interactive || preview || auto {
 		// Settings > CLI supplies the wizard's defaults; explicit flags win.
 		// Only the interactive path reads them, so scripted use is unaffected.
@@ -270,7 +287,14 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 		}
 		return composeInteractive(cfg, a, d, cliform.ComposeOptions{DraftOnly: draftOnly, DryRun: dry, SendNow: now, Signature: wizardSignature, Agent: agent, SkipReview: cfg.Display.CLISkipReview}, out, errOut, j)
 	}
-	msg, err := mailapp.Prepare(a, d, signature && !noSignature)
+	var msg smtp.OutgoingMessage
+	if replyTo != "" && quoteMode == "marker" {
+		// The body carries the quote marker, resolved from the cache like the
+		// composer does; the signature is the ⁂ marker applyReply put there.
+		msg, err = mailapp.PrepareCompose(a, d, quoteOpts...)
+	} else {
+		msg, err = mailapp.Prepare(a, d, signature && !noSignature)
+	}
 	if err != nil {
 		return fail(2, "invalid_message", err.Error())
 	}
@@ -452,4 +476,73 @@ func runOutboxAction(args []string, out, errOut io.Writer) int {
 		return fail(1, "processing_failed", fmt.Sprintf("processed %d queue entries; %d failed; inspect outbox list", processed, failed))
 	}
 	return mailResult(out, errOut, *j, map[string]any{"processed": processed}, 0, "", "")
+}
+
+// applyReply turns a draft into a reply to a cached message: threading headers,
+// "Re:" subject, a default recipient, and the quote as asked. The returned
+// options let PrepareCompose resolve the quote marker from the cache.
+func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent bool, replyTo, quoteMode string, signature bool) (db.Draft, []mailapp.ComposeOption, *replyError) {
+	if quoteMode != "marker" && quoteMode != "text" && quoteMode != "none" {
+		return d, nil, &replyError{"invalid_arguments", "--quote must be marker, text or none", 2}
+	}
+	if agent && !mailapp.Allowed(cfg, "messages.read") {
+		return d, nil, &replyError{"permission_denied", "agent capability denied: messages.read (a reply copies the original's body)", 3}
+	}
+	id, err := readID(replyTo)
+	if err != nil {
+		return d, nil, &replyError{"invalid_arguments", "invalid --reply-to; use an ID from messages list, such as cache:123", 2}
+	}
+	database, err := db.Open()
+	if err != nil {
+		return d, nil, &replyError{"database_error", "cannot open mail cache", 1}
+	}
+	defer database.Close() //nolint:errcheck
+	original, err := database.GetMessage(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return d, nil, &replyError{"not_found", "the message to reply to is not in the cache", 1}
+	}
+	if err != nil {
+		return d, nil, &replyError{"database_error", "cannot read the message to reply to", 1}
+	}
+	d.InReplyTo = original.MessageID
+	d.References = strings.TrimSpace(original.References + " " + original.MessageID)
+	if strings.TrimSpace(d.Subject) == "" {
+		d.Subject = original.Subject
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(d.Subject)), "re:") {
+			d.Subject = "Re: " + d.Subject
+		}
+	}
+	if strings.TrimSpace(d.To) == "" {
+		d.To = original.ReplyTo
+		if strings.TrimSpace(d.To) == "" {
+			d.To = original.From
+		}
+	}
+	body := strings.TrimRight(d.BodyText, "\n")
+	switch quoteMode {
+	case "marker":
+		tail := "\n\n"
+		if signature {
+			tail += mailapp.SignatureMarker + "\n\n"
+		}
+		d.BodyText = body + tail + mailapp.QuoteMarker + "\n"
+		lookup := func(messageID string) (db.Message, bool, error) {
+			lookupDB, e := db.Open()
+			if e != nil {
+				return db.Message{}, false, e
+			}
+			defer lookupDB.Close() //nolint:errcheck
+			return lookupDB.MessageByMessageID(messageID)
+		}
+		return d, []mailapp.ComposeOption{mailapp.WithQuote(d.InReplyTo, lookup)}, nil
+	case "text":
+		d.BodyText = body + "\n\n" + mailapp.BuildQuote(original).ExpandedMarkdown() + "\n"
+	}
+	return d, nil, nil
+}
+
+// replyError is a failure of --reply-to, as the command line reports it.
+type replyError struct {
+	code, message string
+	status        int
 }

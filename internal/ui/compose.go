@@ -111,6 +111,12 @@ type ComposeModel struct {
 	// Offline spell check panel (see spell.go). spellAdded collects words the
 	// user added to their dictionary; the model persists and clears them.
 	spellOpen    bool
+	quoteOpen    bool     // the read-only view of the quoted message is showing
+	quoteLines   []string // its lines
+	quoteTop     int      // first visible line
+	quoteText    string   // the text copied by y
+	expandedFrom string   // the body before the last quote expansion, for one Ctrl+Z
+	expandedTo   string   // the body that expansion produced
 	spellIdx     int
 	spellPick    int
 	spellFixed   int
@@ -349,7 +355,13 @@ func newReplyBase(original db.Message, acfg config.AccountConfig, accounts []con
 
 	// Quote the original body text
 	if plain := quotableText(original); plain != "" {
-		c.setInitialBody("", quoteReply(plain, original.From))
+		if composeReplyMarker {
+			// The marker stands for the quoted message; it is resolved when the
+			// reply is previewed or sent (see mailapp.QuoteMarker).
+			c.setInitialBody("", "\n\n"+mailapp.QuoteMarker+"\n")
+		} else {
+			c.setInitialBody("", quoteReply(plain, original.From))
+		}
 	}
 
 	// Park the body caret above the quote so typing lands there once focus
@@ -500,6 +512,7 @@ func splitReplyAndQuote(body string) (reply, quote string) {
 	for i, ln := range lines {
 		t := strings.TrimSpace(ln)
 		if (strings.HasPrefix(t, "On ") && strings.HasSuffix(t, "wrote:")) ||
+			t == mailapp.QuoteMarker ||
 			strings.Contains(t, "---------- Forwarded message") ||
 			strings.HasPrefix(ln, "> ") {
 			boundary = i
@@ -769,6 +782,9 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 	if c.spellOpen {
 		return c.updateSpell(km, keys)
 	}
+	if c.quoteOpen {
+		return c.updateQuoteView(km, keys)
+	}
 	if c.tmplOpen {
 		return c.updateTemplates(km, keys)
 	}
@@ -807,6 +823,17 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 		var cmd tea.Cmd
 		c, cmd = c.previewDraft()
 		return c, cmd, false
+
+	case km.String() == "ctrl+z" && c.focusedField == composeFieldBody && c.expandedFrom != "":
+		if restored, ok := c.undoExpandQuote(); ok {
+			return restored, nil, false
+		}
+		var cmd tea.Cmd
+		c.bodyInput, cmd = c.bodyInput.Update(msg)
+		return c, cmd, false
+
+	case keyMatches(km, keys.ViewQuote):
+		return c.openQuoteView(), nil, false
 
 	case keyMatches(km, keys.SpellCheck):
 		c.openSpell()
@@ -1241,7 +1268,7 @@ func (c ComposeModel) send() (ComposeModel, tea.Cmd, bool) {
 	}
 	acfg := c.selectedAccount()
 
-	msg, err := mailapp.PrepareCompose(acfg, c.toDraftRecord())
+	msg, err := mailapp.PrepareCompose(acfg, c.toDraftRecord(), quoteOption(c.inReplyTo))
 	if err != nil {
 		c.statusMsg = err.Error()
 		c.isErr = true
@@ -1546,9 +1573,12 @@ func (c ComposeModel) viewWithBodyTop(width, height int, styles Styles) (string,
 		c.bodyInput.Blur()
 	}
 
-	raw := c.bodyInput.View()
+	raw := labelQuoteMarker(c.bodyInput.View(), c.bodyInput.PlaceholderStyle, bodyInputW)
 	if c.tmplOpen && len(c.tmplList) > 0 {
 		raw = c.templatePreview()
+	}
+	if c.quoteOpen {
+		raw = c.quoteViewBody()
 	}
 	// The editor is authoritative on wrapping — it has already fit each line to
 	// bodyInputW. We must only FRAME that output, never re-wrap it: letting

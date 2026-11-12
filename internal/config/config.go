@@ -218,6 +218,8 @@ type DisplayConfig struct {
 	ComposeSpellLang        string `toml:"compose_spell_lang"`   // spell check language code; empty means English
 	// ComposePreviewServer makes F4 serve a live preview from a local server instead of a static file (off by default).
 	ComposePreviewServer bool `toml:"compose_preview_server"`
+	// ComposeReplyMarker starts replies with a quote marker (resolved at send, keeping the original's HTML) instead of a "> " text quote (off by default).
+	ComposeReplyMarker bool `toml:"compose_reply_marker"`
 	// Interactive CLI only; scripted commands ignore these.
 	CLIQuitAfterSend bool               `toml:"cli_quit_after_send"` // leave `tidemail cli` after a successful send or draft
 	CLISkipReview    bool               `toml:"cli_skip_review"`     // skip the wizard's review step when undo or a draft makes it safe
