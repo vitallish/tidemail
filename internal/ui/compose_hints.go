@@ -66,6 +66,7 @@ func (c ComposeModel) composeHints(width int, chrome managerChrome) string {
 		if editorSpell != nil {
 			context = append(context, composeHint{"f7", "spell", 9, true})
 		}
+		context = append(context, composeHint{bindingHintLabel(composeAttachKeys), "attach", 10, true})
 		if len(c.attachments) > 0 {
 			context = append(context, composeHint{"^r", "remove", 3, true})
 		}

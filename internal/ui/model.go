@@ -538,6 +538,7 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 		selectedMessages:       make(map[int64]bool),
 		snooze:                 newSnoozeState(),
 	}
+	m.applyKeyConfig()
 	m.loadUpdateState()
 	m.restoreCachedUpdateState()
 	if previewManualUpdate {
@@ -3573,6 +3574,7 @@ func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 			setEditorVimMode(m.cfg.Display.ComposeVim)
 			setEditorSearchRegex(m.cfg.Display.ComposeSearchRegex)
 			setComposeFilePickerCmd(m.cfg.Display.FilePickerCmd)
+			m.applyKeyConfig()
 			setEditorWordWrap(m.cfg.Display.ComposeWordWrap)
 			setEditorSpell(m.cfg.Display.ComposeSpell, m.cfg.Display.ComposeSpellLang, loadSpellWords(m.db))
 			merged, _ := MergedThemeFromConfig(m.cfg)
