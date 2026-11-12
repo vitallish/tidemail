@@ -1,120 +1,12 @@
 package db
 
-import (
-	"regexp"
-	"strings"
-)
+import "strings"
 
 // Tag search: "#tag" terms in a search match the tags TideMail shows on
 // message rows, using the effective classification (plugin annotations with
 // the user's corrections applied), so a search agrees with the tags on
 // screen. Terms match by prefix, so "#git" already finds #github while
 // typing; several tags must all match.
-
-// Field operators: "from:", "to:", "cc:" and "subject:" limit a term to one
-// header, as in "to:work@example.com". "to:" means anyone the message was
-// addressed to, so it covers Cc as well; "cc:" is Cc alone. Operator names are
-// case-insensitive; a value with spaces is quoted: from:"Jo Smith".
-var searchFieldColumns = map[string][]string{
-	"from":    {"from_addr"},
-	"to":      {"to_addr", "cc_addr"},
-	"cc":      {"cc_addr"},
-	"subject": {"subject"},
-}
-
-// FieldTerm is one operator's value and the full-text columns it searches.
-type FieldTerm struct {
-	Columns []string
-	Value   string
-	// Prefix matches the value as a prefix, so a name matches while it is still
-	// being typed. It is set only on the last term and never for something that
-	// reads as a complete address: "to:work@example.com" must not also find
-	// work@example.company.
-	Prefix bool
-}
-
-// SearchTerms is a search split into full-text words, field operators and
-// #tags.
-type SearchTerms struct {
-	Text   string
-	Fields []FieldTerm
-	Tags   []string
-	// LastIsField reports that the search ends with an operator, so the free
-	// words are complete and only that operator's value is still being typed.
-	LastIsField bool
-}
-
-// completeAddress reports a value shaped like a whole address (name@host.tld).
-func completeAddress(v string) bool {
-	_, host, ok := strings.Cut(v, "@")
-	return ok && strings.Contains(host, ".") && !strings.HasSuffix(host, ".")
-}
-
-// parseFieldOperator splits a "name:value" token into its columns and value;
-// known reports whether the token starts with an operator at all. A quoted value
-// loses its quotes. The value is empty while the user is still typing it.
-func parseFieldOperator(token string) (columns []string, value string, known bool) {
-	name, rest, found := strings.Cut(token, ":")
-	if !found {
-		return nil, "", false
-	}
-	columns, known = searchFieldColumns[strings.ToLower(name)]
-	if !known {
-		return nil, "", false
-	}
-	if strings.HasPrefix(rest, "\"") {
-		rest = strings.TrimSuffix(strings.TrimPrefix(rest, "\""), "\"")
-		rest = strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(rest)
-	}
-	return columns, strings.TrimSpace(rest), true
-}
-
-// ParseSearch splits a search into free text, field operators and lowercase
-// #tag names. A lone "#" or a tag with no usable characters is ignored, and so
-// is an operator that has no value yet.
-func ParseSearch(query string) SearchTerms {
-	var words []string
-	var terms SearchTerms
-	tokens := searchTokenPattern.FindAllString(query, -1)
-	for i, f := range tokens {
-		if !strings.HasPrefix(f, "#") {
-			if columns, value, known := parseFieldOperator(f); known {
-				if value == "" {
-					continue // "to:" with nothing after it yet
-				}
-				last := i == len(tokens)-1
-				terms.Fields = append(terms.Fields, FieldTerm{Columns: columns, Value: value, Prefix: last && !completeAddress(value)})
-				terms.LastIsField = last
-				continue
-			}
-			words = append(words, f)
-			continue
-		}
-		raw := strings.TrimLeft(f, "#")
-		if strings.HasPrefix(raw, "\"") {
-			tag := strings.TrimSuffix(strings.TrimPrefix(raw, "\""), "\"")
-			tag = strings.ToLower(strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(tag))
-			if tag != "" {
-				terms.Tags = append(terms.Tags, tag)
-			}
-			continue
-		}
-		tag := strings.Map(func(r rune) rune {
-			switch {
-			case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-', r == '.', r == '$', r == '+':
-				return r
-			}
-			return -1
-		}, strings.ToLower(strings.TrimLeft(f, "#")))
-		if tag != "" {
-			terms.Tags = append(terms.Tags, tag)
-		}
-	}
-	terms.Text = strings.Join(words, " ")
-	return terms
-}
-
-var searchTokenPattern = regexp.MustCompile(`#+"(?:[^"\\\n]|\\.)*(?:"|$)|(?i:from|to|cc|subject):"(?:[^"\\\n]|\\.)*(?:"|$)|\S+`)
 
 // Attention tags as they appear on rows, with accepted spellings.
 var attentionTagNames = []struct {
@@ -180,16 +72,4 @@ func userAwareSignal(key string, values, user []string) (string, []any) {
 		OR (NOT EXISTS (SELECT 1 FROM classification_overrides co
 			WHERE co.message_id = messages.id AND co.key = ? AND co.value != 'plugin')
 			AND ` + pluginExpr + `))`, args
-}
-
-// tagsWhere ANDs the predicates for every tag.
-func tagsWhere(tags []string) (string, []any) {
-	var parts []string
-	var args []any
-	for _, t := range tags {
-		expr, exprArgs := tagPredicate(t)
-		parts = append(parts, expr)
-		args = append(args, exprArgs...)
-	}
-	return strings.Join(parts, " AND "), args
 }
