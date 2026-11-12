@@ -2,7 +2,7 @@
 
 Issues: vitallish/tidemail #8 (operators, `has:attachment`), #15 (related
 messages), groundwork for #12 (saved searches). Written 2026-11-12, before
-implementation. Status: plan, awaiting the owner's answers to "Decisions".
+implementation. Status: decisions accepted by the owner 2026-11-12; implementation next.
 
 ## What exists today (read from the code, 2026-11-12)
 - `/` searches the local cache only: `db.SearchAllMessages` ->
@@ -28,7 +28,7 @@ exclude, `"quoted phrase"`. Parentheses are NOT in the first cut.
 | `subject:x` `from:x` `to:x` `cc:x` `body:x` | one field | FTS5 column filter | `SUBJECT` `FROM` `TO` `CC` `BODY` |
 | `after:2026-01-01` `before:...` `on:...` | date | `messages.date` | `SINCE` `BEFORE` `ON` (date only, server time zone) |
 | `after:7d` `after:3m` | relative date | same | same |
-| `has:attachment` | has an attachment | `has_attachment` | see Decisions 5 |
+| `has:attachment` | has an attachment | `has_attachment` | post-filter after fetch (Decision 5) |
 | `is:unread` `is:starred` | flags | `read` `starred` | `UNSEEN` `FLAGGED` |
 | `#tag` | tag on a row | as today | never (tags are local) |
 | `related:` | the selected message's conversation | see below | `HEADER` searches |
@@ -67,15 +67,18 @@ search result with the folder on each row. Server step: IMAP
 - Live check on Proton Bridge and Gmail by the owner (Bridge's SEARCH
   support for BODY/TEXT is NOT verified; Gmail's is documented).
 
-## Decisions for the owner
-1. Trigger for server search: explicit key/command (recommended) vs
-   automatic fallback when local results are empty.
-2. Scope: current account's folders (recommended default) vs all accounts.
-3. Results: cache what the server returns (recommended) vs show-only.
+## Decisions (owner, 2026-11-12: all accepted, 5 revised)
+1. Server search runs on an explicit key/command, not automatically.
+2. Scope: the current account's folders by default.
+3. Cache what the server returns, so results behave like any message.
 4. Date semantics: `after:` inclusive, `before:` exclusive, local time.
-5. `has:attachment` on the server: Gmail `X-GM-RAW has:attachment` where
-   available; elsewhere local-only with a status note (recommended) vs a
-   `Content-Type: multipart/mixed` header heuristic (wrong too often).
+5. `has:attachment` is a local post-filter (revised from "local-only"):
+   IMAP has no attachment criterion, so the server narrows by the other
+   terms, the hits are fetched and cached, then `has_attachment` filters
+   them. Gmail may use `X-GM-RAW has:attachment` as an optimisation. A bare
+   `has:attachment` over uncached mail is refused with a status note
+   ("add another term, or sync more history") rather than fetching a whole
+   folder. Works on Proton Bridge because it needs nothing from the server.
 
 ## Docs and bookkeeping
 Guide section (replaces the "Search covers..." paragraph and the cache note),
