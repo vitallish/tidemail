@@ -8,6 +8,9 @@ All notable changes to TideMail are documented in this file.
 
 ### Fixed
 
+- Bulleted and numbered lists lost their markers in the styled reader (`First item`
+  instead of `• First item`, `1One` instead of `1. One`): the glamour theme blanked
+  the item and enumeration prefixes. Present since v1.1.1.
 - TideMail would not start on Windows since v1.8.0: it exited with `error
   opening database: init db: SQL logic error: out of memory (1)`. The database
   path was handed to SQLite as `file://C:/...`, so SQLite took `C:` for a host
