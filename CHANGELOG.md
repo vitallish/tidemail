@@ -69,6 +69,10 @@ All notable changes to TideMail are documented in this file.
   so terminals can open them with Ctrl+click. A label that wraps is linked on
   every line, and prose that only looks like a button is never linked.
   TideMail's own click handling is unchanged.
+- `file_picker_cmd` in `[display]` runs your own file manager for `Alt+F` in
+  compose, e.g. `yazi --chooser-file={chooser}`. TideMail suspends while it
+  runs and attaches every path the picker writes to the `{chooser}` file. Unix
+  only; the built-in browser stays the default.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
