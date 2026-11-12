@@ -46,6 +46,9 @@ All notable changes to TideMail are documented in this file.
 
 ### Fixed
 
+- Bulleted and numbered lists lost their markers in the styled reader (`First item`
+  instead of `• First item`, `1One` instead of `1. One`): the glamour theme blanked
+  the item and enumeration prefixes. Present since v1.1.1.
 - The save-attachment picker no longer crashes when its starting folder cannot
   be read, such as a missing `~/Downloads`; it shows an error instead.
 - Contact marks follow the contact, not its row position, so adding, editing or
