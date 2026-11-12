@@ -71,3 +71,33 @@ that would be sent in the browser, the way the reader's "view message in browser
 - The browser tab is a snapshot: edit the draft and press F4 again for a fresh one.
 - Whether the preview should also show To/Subject as a header block. Left out: the point
   is the body HTML, and extra visible content would break "byte for byte".
+
+## Addendum 2026-11-12: live updates
+
+Owner request: the preview should refresh as the draft changes, not only on each F4.
+
+- First `F4` writes the preview file and opens it, as before, and starts a 1 s tick in
+  compose. Each tick compares the subject and body with what was last written; on a change
+  it rewrites the same file (temp file + rename, so the browser never reads half a page).
+  Pressing `F4` again rewrites and re-opens (for a closed tab).
+- The page carries a small script that calls `location.reload()` every 2 s (scroll position
+  is kept) while a `live-until` meta timestamp is in the future. Every write sets it
+  3 minutes ahead and a 60 s heartbeat keeps extending it while compose is open; once
+  compose closes, the page stops reloading by itself within 3 minutes. A tab in the
+  background does not reload.
+- A body that does not convert (two `⁂` markers while typing) leaves the last good page in
+  place; F4 reports the error.
+- CSP gains `script-src 'sha256-<hash of that script>'` only. Anything else in the draft
+  (including a typed `<script>`) stays blocked.
+
+| Choice | Rejected | Why |
+|---|---|---|
+| Rewrite the file and reload from a script | Loopback HTTP server with change polling or SSE | No listening socket for a private draft (it would need a random path token and a Host check), less code. Cost: a reload every 2 s, visible as a brief repaint. Revisit if it annoys. |
+| Reload on a timer | Reload only when changed | A `file://` page cannot read a sibling file (CORS), so it cannot tell. The tick on the tidemail side already avoids rewriting when nothing changed. |
+| Live-until timestamp | Reload forever | A page left open after compose closed would otherwise reload a stale file indefinitely. |
+
+Steps: `previewDocument(subject, html, liveUntil)` (zero = static page); an atomic
+`writePreviewFile`; `previewDraft` writes synchronously and only the browser launch is
+async; `draftPreviewTickMsg` handling in `ComposeModel.Update`; tests for the script hash in
+the CSP, no reload script in a static page, rewrite-on-change, no rewrite when unchanged,
+heartbeat after 60 s, tick chain ends when not live. Docs: guide, help text, CHANGELOG.
