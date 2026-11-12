@@ -135,12 +135,12 @@ func tidemailDarkStyle(th Theme) string {
 		"background_color": "` + bg + `"
 	},
 	"item": {
-		"block_prefix": "",
+		"block_prefix": "• ",
 		"block_suffix": "",
 		"background_color": "` + bg + `"
 	},
 	"enumeration": {
-		"block_prefix": "",
+		"block_prefix": ". ",
 		"block_suffix": "",
 		"background_color": "` + bg + `"
 	},
