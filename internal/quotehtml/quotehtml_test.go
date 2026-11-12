@@ -103,6 +103,9 @@ func TestFromTextEscapesAndKeepsParagraphs(t *testing.T) {
 func TestPlainTextOfATable(t *testing.T) {
 	frag := Sanitize(`<p>Totals</p><table><tr><th>Item</th><th>Qty</th></tr><tr><td>Pens</td><td>3</td></tr></table><ul><li>a</li><li>b</li></ul><p>See <a href="https://e.example/x">the site</a>.</p>`)
 	got := PlainText(frag)
+	if !strings.Contains(got, "Item | Qty\nPens | 3") {
+		t.Errorf("table rows must follow each other without blank lines:\n%s", got)
+	}
 	for _, want := range []string{"Totals", "Item | Qty", "Pens | 3", "- a", "- b", "the site <https://e.example/x>."} {
 		if !strings.Contains(got, want) {
 			t.Errorf("PlainText missing %q in:\n%s", want, got)

@@ -88,7 +88,9 @@ func writeText(b *strings.Builder, n *xhtml.Node) {
 		if prev := n.PrevSibling; prev != nil {
 			b.WriteString(" | ")
 		}
-	case atom.P, atom.Div, atom.Tr, atom.Table, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6, atom.Blockquote, atom.Pre, atom.Ul, atom.Ol:
+	case atom.Tr:
+		b.WriteString("\n") // rows follow one another without blank lines
+	case atom.P, atom.Div, atom.Table, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6, atom.Blockquote, atom.Pre, atom.Ul, atom.Ol:
 		b.WriteString("\n")
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
@@ -101,7 +103,7 @@ func writeText(b *strings.Builder, n *xhtml.Node) {
 				b.WriteString(" <" + href + ">")
 			}
 		}
-	case atom.P, atom.Div, atom.Tr, atom.Table, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6, atom.Blockquote, atom.Pre, atom.Ul, atom.Ol:
+	case atom.P, atom.Div, atom.Table, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6, atom.Blockquote, atom.Pre, atom.Ul, atom.Ol:
 		b.WriteString("\n")
 	}
 }
