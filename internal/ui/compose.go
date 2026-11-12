@@ -92,6 +92,7 @@ type ComposeModel struct {
 	subjectInput textinput.Model
 	bodyInput    editorArea
 	bodyMouse    composeMouseState
+	preview      livePreview // the F4 browser preview
 
 	maximized    bool // Session-only; every new composer starts compact.
 	focusedField composeField
@@ -715,6 +716,12 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 		return c.send()
 	case ripple.CancelMsg:
 		return c, nil, true
+	}
+	if _, ok := msg.(draftPreviewTickMsg); ok {
+		if !c.preview.live {
+			return c, nil, false // a stale tick from an earlier composer
+		}
+		return c.refreshLivePreview(), previewTick(), false
 	}
 	if done, ok := msg.(draftPreviewMsg); ok {
 		c.statusMsg, c.isErr = "Preview opened in browser", false

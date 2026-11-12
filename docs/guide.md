@@ -781,12 +781,22 @@ and their styling, links, and your signature. It uses your `[display] browser`
 setting, or the system default browser when that is empty.
 
 It works from any field and before you have addressed the message. It does not
-save the draft and does not send anything. The page is a snapshot: change the
-draft and press `F4` again for a fresh one.
+save the draft and does not send anything.
+
+The preview is live. While compose stays open, TideMail rewrites the page when
+the subject or body changes, and the page reloads itself every couple of seconds
+(a brief repaint; your scroll position is kept, and a tab in the background does
+not reload). Keep the browser beside the terminal and watch a table take shape
+as you type. If the body does not convert while you are in the middle of editing
+(for example, two `⁂` signature markers), the last good page stays up. Press
+`F4` again to open the page in a fresh tab if you closed it. When you close
+compose the page stops updating, and it stops reloading itself within three
+minutes. There is no server: the page is a file, and nothing listens on a port.
 
 The page contains the HTML part byte for byte, inside a minimal document with a
-title (`Preview (not sent): <subject>`) and a policy that stops it loading
-anything from the network. It does not show the plain-text part, attachments,
+title (`Preview (not sent): <subject>`), the reload script, and a policy that
+stops it loading anything from the network. The policy allows that one script
+and nothing else, so a `<script>` typed into a draft does not run. It does not show the plain-text part, attachments,
 PGP signing or encryption, or inline images (drafts cannot carry those yet).
 Mail clients restyle HTML in their own ways, so this is a close preview, not a
 guarantee: Gmail, Outlook and dark-mode clients can still differ.
@@ -1289,7 +1299,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `Ctrl+D` | Save attachments to folder |
 | `Ctrl+G` | AI grammar & spell check (compose). The preview fits the screen and scrolls with `↑`/`↓`, `PgUp`/`PgDn`, and `Home`/`End`; `y` accepts, `n` or `Esc` cancels |
 | `F7` | Offline spell check (compose); needs Settings → Editor → Spell check |
-| `F4` | Preview the draft in your browser (compose) |
+| `F4` | Preview the draft in your browser, updating as you type (compose) |
 | `Alt+M` in compose | Maximize the compose panel across the full terminal; press again to restore. The application status bar is hidden; compose notifications (including autosave failures) appear in the composer footer. Each new compose, reply, forward, or reopened draft starts compact. |
 | `F6` in compose | Template picker; `Enter` inserts, `e` edits, `n` saves the message as a new template |
 | `D` | Decrypt and verify the open PGP message (needs a PGP plugin) |

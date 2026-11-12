@@ -127,7 +127,7 @@ func (m Model) composeCommandItems() []commandItem {
 		{id: "compose-spell", label: "Spell check (offline)", enabled: editorSpell != nil},
 		{id: "compose-grammar", label: "Run grammar check", enabled: true},
 		{id: "compose-template", label: "Insert template…", enabled: true},
-		{id: "compose-preview", label: "Preview draft in browser", enabled: true},
+		{id: "compose-preview", label: "Preview draft in browser (live)", enabled: true},
 		{id: "compose-attach", label: "Attach file", enabled: true},
 		{id: "compose-remove-attach", label: "Remove last attachment", enabled: canRemove},
 		{id: "compose-cycle-sender", label: "Change sender", enabled: canCycleSender},

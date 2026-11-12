@@ -10,7 +10,8 @@ All notable changes to TideMail are documented in this file.
 
 - `F4` in compose (or **Preview draft in browser** in the command palette) opens the
   HTML part of the draft in your browser exactly as it would be sent, before you
-  send it. Nothing is saved or sent, and recipients are not required. See
+  send it. The page updates as you type. Nothing is saved or sent, and recipients
+  are not required. See
   "Previewing a draft in the browser" in the guide.
 
 ### Fixed
