@@ -71,11 +71,11 @@ func TestQuoteMarkerPositionDecidesTopOrInlinePosting(t *testing.T) {
 		t.Fatal(err)
 	}
 	q, a, s := strings.Index(msg.Body, "wrote:"), strings.Index(msg.Body, "My answer"), strings.Index(msg.Body, "-- \nMe")
-	if !(q >= 0 && q < a && a < s) {
+	if q < 0 || q >= a || a >= s {
 		t.Errorf("text order quote=%d answer=%d signature=%d:\n%s", q, a, s, msg.Body)
 	}
 	qh, ah := strings.Index(msg.HTMLBody, "<blockquote"), strings.Index(msg.HTMLBody, "My answer")
-	if !(qh >= 0 && qh < ah) {
+	if qh < 0 || qh >= ah {
 		t.Errorf("HTML order quote=%d answer=%d", qh, ah)
 	}
 	// No marker, no quote.
