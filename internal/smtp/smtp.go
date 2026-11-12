@@ -26,6 +26,7 @@ import (
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 )
 
 var (
@@ -500,15 +501,17 @@ func quotedPrintable(s string) string {
 // adding only their own options: a second hand-built converter is how GFM went
 // missing on the signature-marker path.
 func NewMarkdown(opts ...goldmark.Option) goldmark.Markdown {
-	return goldmark.New(append([]goldmark.Option{goldmark.WithExtensions(extension.GFM)}, opts...)...)
+	base := []goldmark.Option{goldmark.WithExtensions(extension.GFM)}
+	if t := tableTransformer(); len(t) > 0 {
+		base = append(base, goldmark.WithParserOptions(parser.WithASTTransformers(t...)))
+	}
+	return goldmark.New(append(base, opts...)...)
 }
-
-var markdownConverter = NewMarkdown()
 
 // MarkdownToHTML converts Markdown text to HTML using goldmark.
 func MarkdownToHTML(md string) string {
 	var buf bytes.Buffer
-	if err := markdownConverter.Convert([]byte(md), &buf); err != nil {
+	if err := NewMarkdown().Convert([]byte(md), &buf); err != nil {
 		return ""
 	}
 	return buf.String()

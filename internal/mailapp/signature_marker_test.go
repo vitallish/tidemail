@@ -267,3 +267,26 @@ func TestComposePathsShareMarkdownExtensions(t *testing.T) {
 		})
 	}
 }
+
+func TestComposePathsApplyTableStyleAlike(t *testing.T) {
+	smtp.SetTableStyle("basic", "")
+	t.Cleanup(func() { smtp.SetTableStyle("", "") })
+	a := config.AccountConfig{User: "sender@example.com", Signature: "Alice"}
+	table := "| Arm | N |\n|:---|---:|\n| A | 12 |\n"
+	for _, tc := range []struct{ name, body string }{
+		{"no marker", table},
+		{"marker", table + "\n⁂\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: tc.body})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{`<table style="border-collapse:collapse">`, `<td style="border:1px solid #999;padding:4px 8px;text-align:right">12</td>`} {
+				if !strings.Contains(msg.HTMLBody, want) {
+					t.Fatalf("HTML lacks %q:\n%s", want, msg.HTMLBody)
+				}
+			}
+		})
+	}
+}
