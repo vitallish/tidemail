@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,7 +85,11 @@ func DescribeTerms(terms []searchquery.Term) string {
 // query has no date of its own (see WithServerWindow); 0 means no limit.
 func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.SessionPool, targets []SearchTarget, query string, now time.Time, windowDays int) (ServerSearchResult, error) {
 	var res ServerSearchResult
-	criteria, skipped, ok := imapClient.SearchCriteria(ServerQuery(query, now, windowDays))
+	parsed, err := expandRelated(database, searchquery.Parse(query, now))
+	if err != nil {
+		return res, err
+	}
+	criteria, skipped, ok := imapClient.SearchCriteria(parsed)
 	if !ok {
 		return res, &NothingToSearchError{Skipped: skipped}
 	}
@@ -123,50 +128,51 @@ func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.Ses
 	return res, nil
 }
 
-// ServerQuery parses a search the way the server search runs it: with the
-// default date window added.
-func ServerQuery(query string, now time.Time, windowDays int) searchquery.Query {
-	return WithServerWindow(searchquery.Parse(query, now), now, windowDays)
-}
+// relatedIDLimit caps how many Message-IDs one related: search sends to the
+// server; each becomes three header searches.
+const relatedIDLimit = 20
 
-// WithServerWindow adds "after:<windowDays>d" to q so a server search stays quick
-// on a big mailbox and has something the server can run for has:attachment. It
-// leaves q alone when windowDays is 0 or the query already has a date term
-// (after:, before: or on:), so an explicit date always wins. The window only
-// limits what the server is asked for: the local search that follows still shows
-// older mail that is already cached.
-func WithServerWindow(q searchquery.Query, now time.Time, windowDays int) searchquery.Query {
-	if windowDays <= 0 {
-		return q
-	}
-	for _, t := range q.Terms() {
-		if t.Field == searchquery.Date {
-			return q
+// expandRelated replaces each related:<id> term with header searches the server
+// can run: for every Message-ID in that message's conversation (its own and the
+// ones it references or is referenced by), a Message-ID, References or
+// In-Reply-To header containing it. That finds ancestors and replies the cache
+// lacks; once downloaded, the local conversation search includes them. A
+// negated related: is left alone and filtered locally.
+func expandRelated(database *db.DB, q searchquery.Query) (searchquery.Query, error) {
+	var out searchquery.Query
+	out.Problems = q.Problems
+	for _, clause := range q.Clauses {
+		var expanded []searchquery.Term
+		for _, term := range clause {
+			if term.Field != searchquery.Related || term.Negate {
+				expanded = append(expanded, term)
+				continue
+			}
+			id, err := strconv.ParseInt(term.Value, 10, 64)
+			if err != nil {
+				continue
+			}
+			tokens, err := database.RelatedMessageIDTokens(id)
+			if err != nil {
+				return q, err
+			}
+			if len(tokens) == 0 {
+				return q, fmt.Errorf("message %d is not in the cache, or has no Message-ID to follow", id)
+			}
+			if len(tokens) > relatedIDLimit {
+				tokens = tokens[:relatedIDLimit]
+			}
+			for _, token := range tokens {
+				for _, header := range []string{"Message-ID", "References", "In-Reply-To"} {
+					expanded = append(expanded, searchquery.Term{Field: searchquery.HeaderMatch, Key: header, Value: token})
+				}
+			}
+		}
+		if len(expanded) > 0 {
+			out.Clauses = append(out.Clauses, expanded)
 		}
 	}
-	window := searchquery.Parse(fmt.Sprintf("after:%dd", windowDays), now)
-	out := searchquery.Query{Problems: q.Problems}
-	out.Clauses = append(append(out.Clauses, q.Clauses...), window.Clauses...)
-	return out
-}
-
-// WithWindowText returns query with " after:<windowDays>d" appended when the
-// server search would add the window (see WithServerWindow), and whether it did.
-// The terminal interface writes this into the search field, so the limit is
-// visible and can be edited or replaced by a date of the user's own.
-func WithWindowText(query string, now time.Time, windowDays int) (string, bool) {
-	if appliedWindow(query, now, windowDays) == 0 {
-		return query, false
-	}
-	return strings.TrimSpace(query) + fmt.Sprintf(" after:%dd", windowDays), true
-}
-
-// appliedWindow is windowDays when ServerQuery added the window to query, else 0.
-func appliedWindow(query string, now time.Time, windowDays int) int {
-	if len(ServerQuery(query, now, windowDays).Clauses) == len(searchquery.Parse(query, now).Clauses) {
-		return 0
-	}
-	return windowDays
+	return out, nil
 }
 
 // SearchableMailboxes drops folders that cannot be searched or that hold only

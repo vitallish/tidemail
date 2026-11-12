@@ -56,6 +56,10 @@ All notable changes to TideMail are documented in this file.
   box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
   filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
   **Clear search history** is in the command palette.
+- `L` on a message shows its whole conversation from every folder of the account,
+  found by reply headers (`related:<id>`, also `tidemail messages search
+  "related:cache:123" [--server]`); `Ctrl+G` also fetches conversation messages the
+  cache lacks.
 
 ### Fixed
 
