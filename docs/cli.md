@@ -133,13 +133,29 @@ do not interpret body text as a marker.
 ## Cached inbox reads
 
 `messages list` reads the cached unified inbox. `messages search` searches the
-cached messages through TideMail's existing search implementation. Neither
-command connects to IMAP or refreshes mail.
+cached messages through TideMail's existing search implementation, which takes
+the operators described in the guide (`from:ann after:7d has:attachment`, `OR`,
+`-exclude`, `"exact phrase"`). Neither command connects to IMAP or refreshes mail,
+unless you add `--server` to `messages search`.
 
 ```bash
 tidemail messages list --unread --limit 25 --offset 0 --json
 tidemail messages search "invoice" --limit 25 --json
 tidemail messages read cache:123 --json
+```
+
+`messages search "from:ann" --server` first asks the mail server, then answers from
+the cache. It searches every folder of every account (`--account NAME` limits it to
+one, by name or ID), downloads matches the cache lacks, newest first, up to 50 per
+folder, and then runs the cached search, so `has:attachment` and tags still apply.
+The server report is in the JSON `server` object (`folders`, `found`, `fetched`,
+`not_downloaded`, `errors`, `checked_locally`) and, in text mode, one line on
+standard error. A search with nothing the server can answer on its own, such as
+`has:attachment`, is refused with exit status 2 rather than downloading a whole
+folder.
+
+```bash
+tidemail messages search "from:ann after:30d" --server --account Work --json
 ```
 
 List and search results contain metadata, including subject, sender, recipients,
@@ -250,6 +266,8 @@ agent_permissions = [
 ]
 ```
 
+`messages.search_server` (not in the defaults) lets `messages search --server`
+contact the mail server and store what it finds in the cache.
 `messages.read` grants full cached body retrieval. `mail.send` grants the ability
 to send in agent mode, but the command still needs invocation approval through
 `--yes` or approved interactive preview. Agent queue processing and retry require
