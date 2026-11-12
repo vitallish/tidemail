@@ -71,5 +71,6 @@ came from that duplication; the styling would be the next thing to be added to o
 
 ## Open points
 
+- Gmail web verified with `basic` (owner, 2026-11-12): borders, padding, header, alignment.
 - Dark-mode clients may invert or recolour; #999 was picked as neutral, not tested.
 - Gmail mobile and Outlook unverified.
