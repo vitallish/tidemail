@@ -463,6 +463,8 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 	// Compose body editors pick up vim mode from config via this package var
 	// (read in newEditorArea), the same way the clipboard is injected.
 	setEditorVimMode(cfg.Display.ComposeVim)
+	setComposeBrowser(cfg.Display.Browser)
+	setComposePreviewServer(cfg.Display.ComposePreviewServer)
 	setEditorSearchRegex(cfg.Display.ComposeSearchRegex)
 	setEditorWordWrap(cfg.Display.ComposeWordWrap)
 	setEditorSpell(cfg.Display.ComposeSpell, cfg.Display.ComposeSpellLang, loadSpellWords(database))
@@ -3570,6 +3572,8 @@ func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.contentShowHeaders = m.cfg.Display.ShowHeaders
 			// Apply the vim toggle to future compose editors (read in newEditorArea).
 			setEditorVimMode(m.cfg.Display.ComposeVim)
+			setComposeBrowser(m.cfg.Display.Browser)
+			setComposePreviewServer(m.cfg.Display.ComposePreviewServer)
 			setEditorSearchRegex(m.cfg.Display.ComposeSearchRegex)
 			setEditorWordWrap(m.cfg.Display.ComposeWordWrap)
 			setEditorSpell(m.cfg.Display.ComposeSpell, m.cfg.Display.ComposeSpellLang, loadSpellWords(m.db))

@@ -772,6 +772,63 @@ message, while `:q` cancels it.
 Replies and forwards quote the readable text of an HTML message, not its markup,
 and a forward keeps the original's attachments.
 
+### Previewing a draft in the browser
+
+Press `F4` in compose (or choose **Preview draft in browser** from the command
+palette, `Ctrl+P`) to see how the message will look. TideMail opens the HTML part
+of the message exactly as it would be sent: the Markdown rendered to HTML, tables
+and their styling, links, and your signature. It uses your `[display] browser`
+setting, or the system default browser when that is empty.
+
+It works from any field and before you have addressed the message. It does not
+save the draft and does not send anything.
+
+By default the preview is a file. `F4` writes the page to a private folder in
+your temporary directory (owner-only, cleaned up after an hour) and opens it. The
+page does not change on its own, and TideMail never rewrites it behind your back:
+edit the draft, press `F4` again, and reload the browser tab. `F4` opens the
+browser each time; the file keeps the same name, so reloading an open tab also
+works. Nothing runs in the page and nothing listens on a port.
+
+**Live preview server (optional).** To have the page follow your typing, turn on
+**Settings → Editor → Live preview server (F4)** or set this in `config.toml`:
+
+```toml
+[display]
+compose_preview_server = true   # default false
+```
+
+`F4` then starts a small web server on your own machine and opens its address in
+the browser. While compose is open, the page updates in place a moment after you
+type, with no reload or flicker, and keeps its scroll position. Pressing `F4`
+again reopens the page. Nothing is written to disk in this mode. When you close
+compose the server stops on its own within about ten seconds, and it always stops
+when TideMail exits. If the server cannot start, `F4` falls back to the static
+file and the status line says why.
+
+That server is the one place the preview opens a port, so here is what protects
+it. It listens on `127.0.0.1` only, never on the network. The address contains a
+random secret, and anything without it gets a 404. It checks that each request
+names exactly that loopback address and port, which stops a web page from using
+DNS tricks to reach it. It serves only `GET` requests, sends no cross-origin
+permissions, and tells the browser not to cache or pass the address on. The page
+may run only its own small update script, so a `<script>` typed into a draft does
+not run. Anyone who can already run programs as you could still find the port and
+the secret, but they could equally read your mail database.
+
+In server mode the browser swaps each new version into the page, so the HTML is
+re-parsed by the browser; the first load carries it exactly as sent. Either way
+the page is the same HTML part the message is sent with, inside a minimal
+document with a title (`Preview (not sent): <subject>`) and a policy that stops it
+loading anything from the network. If the body is invalid (for example two `⁂`
+signature markers), the status line says so, as it does when sending, and the live
+page keeps the last good version.
+
+The preview does not show the plain-text part, attachments, PGP signing or
+encryption, or inline images (drafts cannot carry those yet). Mail clients
+restyle HTML in their own ways, so this is a close preview, not a guarantee:
+Gmail, Outlook and dark-mode clients can still differ.
+
 ### Templates
 
 Press `F6` in compose (the footer shows `f6 templates` in every field) to open
@@ -1265,6 +1322,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `Ctrl+D` | Save attachments to folder |
 | `Ctrl+G` | AI grammar & spell check (compose). The preview fits the screen and scrolls with `↑`/`↓`, `PgUp`/`PgDn`, and `Home`/`End`; `y` accepts, `n` or `Esc` cancels |
 | `F7` | Offline spell check (compose); needs Settings → Editor → Spell check |
+| `F4` | Preview the draft in your browser; live with the optional preview server (compose) |
 | `Alt+M` in compose | Maximize the compose panel across the full terminal; press again to restore. The application status bar is hidden; compose notifications (including autosave failures) appear in the composer footer. Each new compose, reply, forward, or reopened draft starts compact. |
 | `F6` in compose | Template picker; `Enter` inserts, `e` edits, `n` saves the message as a new template |
 | `D` | Decrypt and verify the open PGP message (needs a PGP plugin) |

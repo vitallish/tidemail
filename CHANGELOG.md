@@ -6,6 +6,16 @@ All notable changes to TideMail are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `F4` in compose (or **Preview draft in browser** in the command palette) opens the
+  HTML part of the draft in your browser exactly as it would be sent, before you
+  send it. Nothing is saved or sent, and recipients are not required. The page is
+  a static file; press `F4` again to refresh it. Optionally
+  (`compose_preview_server = true`, or **Settings → Editor → Live preview
+  server**) it is served from a loopback-only local server and updates as you
+  type, with no reload. See "Previewing a draft in the browser" in the guide.
+
 ### Fixed
 
 - TideMail would not start on Windows since v1.8.0: it exited with `error
