@@ -591,3 +591,25 @@ func TestComposePreviewServerDefaultsOffAndSurvivesSaveAndLoad(t *testing.T) {
 		t.Fatalf("round trip lost compose_preview_server: %+v (%v)", got.Display, err)
 	}
 }
+
+func TestKeysSurviveSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	cfg.Keys = map[string][]string{"AttachFile": {"ctrl+o", "f4"}}
+	if err := Save(cfg); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if k := got.Keys["AttachFile"]; len(k) != 2 || k[0] != "ctrl+o" || k[1] != "f4" {
+		t.Fatalf("Keys = %v", got.Keys)
+	}
+}
+
+func TestDefaultConfigHasNoKeyOverrides(t *testing.T) {
+	if k := DefaultConfig().Keys; len(k) != 0 {
+		t.Fatalf("default Keys = %v, want none", k)
+	}
+}

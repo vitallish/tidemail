@@ -25,6 +25,10 @@ All notable changes to TideMail are documented in this file.
   (`compose_preview_server = true`, or **Settings → Editor → Live preview
   server**) it is served from a loopback-only local server and updates as you
   type, with no reload. See "Previewing a draft in the browser" in the guide.
+- A `[keys]` table in `config.toml` rebinds individual keys by name. Only
+  `AttachFile` (default `Alt+F`) is supported so far, e.g.
+  `AttachFile = ["ctrl+o"]`; the compose footer now shows the attach key and the
+  command palette follows it.
 
 ### Fixed
 

@@ -244,10 +244,10 @@ func TestComposeVimBodyHintsFollowTheMode(t *testing.T) {
 		enter func()
 		row   string
 	}{
-		{"NORMAL", normal, "esc cancel alt+m maximize ^g grammar f4 preview / find y yank p put u undo"},
-		{"INSERT", func() { c.bodyInput.ed.StartInsert() }, "esc normal alt+m maximize ^g grammar f4 preview"},
-		{"VISUAL", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}) }, "esc normal alt+m maximize ^g grammar f4 preview y yank d delete c change"},
-		{"COMMAND", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}) }, "esc normal alt+m maximize ^g grammar f4 preview enter run :w send :q cancel"},
+		{"NORMAL", normal, "esc cancel alt+m maximize ^g grammar alt+f attach / find y yank p put u undo"},
+		{"INSERT", func() { c.bodyInput.ed.StartInsert() }, "esc normal alt+m maximize ^g grammar alt+f attach f4 preview"},
+		{"VISUAL", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}) }, "esc normal alt+m maximize ^g grammar alt+f attach y yank d delete c change"},
+		{"COMMAND", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}) }, "esc normal alt+m maximize ^g grammar alt+f attach enter run :w send :q cancel"},
 	}
 	var actions string
 	escCol := -1
@@ -486,7 +486,7 @@ func TestComposePreviewHintYieldsToFocusedFieldKeys(t *testing.T) {
 	c.bodyInput.ed.StartInsert()
 	c.bodyInput, _ = c.bodyInput.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	shown := false
-	for width := 120; width >= 50; width -= 2 {
+	for width := 200; width >= 50; width -= 2 {
 		text := plainComposeHintText(c.composeHints(width, newManagerChrome(width, CatppuccinMocha, false)))
 		hasPreview, hasVim := strings.Contains(text, "f4 preview"), strings.Contains(text, "p put")
 		shown = shown || hasPreview
