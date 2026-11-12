@@ -521,3 +521,41 @@ func TestComposeSearchRegexDefaultAndPersistence(t *testing.T) {
 		}
 	}
 }
+
+func TestTableStyleSettingsSurviveSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	if cfg.Display.ComposeTableStyle != "" || cfg.Display.ComposeTableCSS != "" {
+		t.Fatalf("table styling must be off by default: %+v", cfg.Display)
+	}
+	cfg.Display.ComposeTableStyle = TableStyleCustom
+	cfg.Display.ComposeTableCSS = "border:1px solid #444;padding:6px 10px"
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Display.ComposeTableStyle != TableStyleCustom || got.Display.ComposeTableCSS != "border:1px solid #444;padding:6px 10px" {
+		t.Fatalf("round trip lost table settings: %+v", got.Display)
+	}
+}
+
+func TestNormalizeTableStyle(t *testing.T) {
+	for in, want := range map[string]struct {
+		style string
+		ok    bool
+	}{
+		"":        {TableStyleNone, true},
+		" Basic ": {TableStyleBasic, true},
+		"custom":  {TableStyleCustom, true},
+		"none":    {TableStyleNone, true},
+		"fancy":   {TableStyleNone, false},
+		"borders": {TableStyleNone, false},
+	} {
+		if style, ok := NormalizeTableStyle(in); style != want.style || ok != want.ok {
+			t.Errorf("NormalizeTableStyle(%q) = %q, %v; want %q, %v", in, style, ok, want.style, want.ok)
+		}
+	}
+}
