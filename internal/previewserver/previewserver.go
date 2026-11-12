@@ -153,11 +153,12 @@ func (s *Server) watch() {
 	}
 }
 
-// csp is the page policy: nothing loads except data: images, inline styles,
-// this origin's event stream and document, and the one page script by hash.
+// csp is the page policy: nothing loads except data: and remote http(s) images
+// (as the recipient's client may show them), inline styles, this origin's event
+// stream and document, and the one page script by hash.
 func csp() string {
 	sum := sha256.Sum256([]byte(pageScript))
-	return "default-src 'none'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; " +
+	return "default-src 'none'; style-src 'unsafe-inline'; img-src data: https: http:; connect-src 'self'; " +
 		"script-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; " +
 		"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 }

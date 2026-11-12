@@ -176,7 +176,7 @@ func (r *Resolver) takeWidth(img *ast.Image, source []byte) int {
 func (r *Resolver) rewrite(img *ast.Image, source []byte) {
 	wantWidth := r.takeWidth(img, source)
 	src := string(img.Destination)
-	alt := string(img.Text(source))
+	alt := altText(img, source)
 	switch Classify(src) {
 	case KindRemote:
 		// Never fetched. The size is unknown, so only keep it from overflowing a
@@ -204,6 +204,23 @@ func (r *Resolver) rewrite(img *ast.Image, source []byte) {
 	default:
 		r.problem("image source %q: file paths are not supported; attach the file and use its name, like ![%s](logo.png)", src, alt)
 	}
+}
+
+// altText is the plain text of an image's description, with any emphasis or
+// other inline markup inside it flattened.
+func altText(n ast.Node, source []byte) string {
+	var b strings.Builder
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		switch t := c.(type) {
+		case *ast.Text:
+			b.Write(t.Segment.Value(source))
+		case *ast.String:
+			b.Write(t.Value)
+		default:
+			b.WriteString(altText(c, source))
+		}
+	}
+	return b.String()
 }
 
 func shortAlt(alt string) string {
