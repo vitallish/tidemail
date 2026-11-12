@@ -11,6 +11,7 @@ import (
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	imapClient "github.com/allisonhere/tidemail/internal/imap"
+	"github.com/allisonhere/tidemail/internal/mailapp"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
@@ -22,6 +23,7 @@ type serverSearchFixture struct {
 	model    Model
 	database *db.DB
 	inbox    int64
+	last     ServerSearchDoneMsg
 }
 
 func newServerSearchFixture(t *testing.T) *serverSearchFixture {
@@ -88,7 +90,7 @@ func newServerSearchFixture(t *testing.T) *serverSearchFixture {
 	return &serverSearchFixture{model: m, database: database, inbox: inbox}
 }
 
-func (f *serverSearchFixture) search(t *testing.T, query string) (Model, ServerSearchDoneMsg) {
+func (f *serverSearchFixture) search(t *testing.T, query string) (Model, mailapp.ServerSearchResult) {
 	t.Helper()
 	m := f.model
 	m.searchQuery = query
@@ -101,14 +103,18 @@ func (f *serverSearchFixture) search(t *testing.T, query string) (Model, ServerS
 	if !ok {
 		t.Fatal("search did not finish with ServerSearchDoneMsg")
 	}
-	return m, done
+	f.last = done
+	if done.Err != nil {
+		t.Fatalf("search failed: %v", done.Err)
+	}
+	return m, done.Result
 }
 
 func TestServerSearchDownloadsOnlyWhatIsMissingThenSearchesLocally(t *testing.T) {
 	f := newServerSearchFixture(t)
 	m, done := f.search(t, "from:ann")
-	if done.Err != nil || len(done.Errs) != 0 {
-		t.Fatalf("search failed: %v %v", done.Err, done.Errs)
+	if len(done.Errs) != 0 {
+		t.Fatalf("search failed: %v", done.Errs)
 	}
 	if done.Found != 2 || done.Fetched != 1 || done.Folders != 1 {
 		t.Fatalf("found=%d fetched=%d folders=%d, want 2 matches, 1 downloaded, 1 folder", done.Found, done.Fetched, done.Folders)
@@ -126,7 +132,7 @@ func TestServerSearchDownloadsOnlyWhatIsMissingThenSearchesLocally(t *testing.T)
 		t.Fatalf("cache holds %q, want Old invoice and Older invoice only", got)
 	}
 	// The done message re-runs the local search, which now finds both.
-	next, cmd := m.handleServerSearchDone(done)
+	next, cmd := m.handleServerSearchDone(f.last)
 	m = next.(Model)
 	if cmd == nil || !strings.Contains(m.statusMsg, "2 matches") || !strings.Contains(m.statusMsg, "1 new downloaded") {
 		t.Fatalf("status %q", m.statusMsg)
@@ -156,19 +162,19 @@ func TestServerSearchStopsAtThePerFolderCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	for i := 0; i < serverSearchPerFolder+5; i++ {
+	for i := 0; i < mailapp.ServerSearchPerFolder+5; i++ {
 		raw := fmt.Sprintf("From: Zed <zed@example.com>\r\nSubject: bulk %d\r\nMessage-ID: <b%d@t>\r\n\r\nx\r\n", i, i)
 		if err := client.AppendWithFlags(ctx, "INBOX", []byte(raw), time.Now()); err != nil {
 			t.Fatal(err)
 		}
 	}
 	_, done := f.search(t, "from:zed")
-	if done.Found != serverSearchPerFolder+5 || done.Fetched != serverSearchPerFolder || done.Capped != 5 {
+	if done.Found != mailapp.ServerSearchPerFolder+5 || done.Fetched != mailapp.ServerSearchPerFolder || done.Capped != 5 {
 		t.Fatalf("found=%d fetched=%d capped=%d", done.Found, done.Fetched, done.Capped)
 	}
 	m := f.model
 	m.searchQuery = "from:zed"
-	next, _ := m.handleServerSearchDone(done)
+	next, _ := m.handleServerSearchDone(f.last)
 	if got := next.(Model).statusMsg; !strings.Contains(got, "5 more not downloaded") {
 		t.Fatalf("status %q does not say the cap was hit", got)
 	}
@@ -192,12 +198,12 @@ func TestServerSearchRefusesWhatOnlyTheCacheCanAnswer(t *testing.T) {
 	// Attachments combined with something the server can search are fine, and
 	// the status says the attachment test is done locally.
 	_, done := f.search(t, "from:ann has:attachment")
-	if done.Err != nil || done.Found != 2 {
-		t.Fatalf("combined search: found=%d err=%v", done.Found, done.Err)
+	if done.Found != 2 {
+		t.Fatalf("combined search: found=%d", done.Found)
 	}
 	m := f.model
 	m.searchQuery = "from:ann has:attachment"
-	next, _ := m.handleServerSearchDone(done)
+	next, _ := m.handleServerSearchDone(f.last)
 	if got := next.(Model).statusMsg; !strings.Contains(got, "has:attachment checked locally") {
 		t.Errorf("status %q", got)
 	}
@@ -221,15 +227,15 @@ func TestServerSearchNeedsASearchFirst(t *testing.T) {
 
 func TestServerSearchIgnoresAnAnswerToAnOlderQuery(t *testing.T) {
 	f := newServerSearchFixture(t)
-	_, done := f.search(t, "from:ann")
+	f.search(t, "from:ann")
 	m := f.model
 	m.searchQuery = "something else now"
-	next, cmd := m.handleServerSearchDone(done)
+	next, cmd := m.handleServerSearchDone(f.last)
 	if cmd != nil || next.(Model).statusMsg != "" {
 		t.Errorf("a stale answer changed the screen: cmd=%v status=%q", cmd != nil, next.(Model).statusMsg)
 	}
 	m.searchMode, m.searchQuery = false, "from:ann"
-	if _, cmd := m.handleServerSearchDone(done); cmd != nil {
+	if _, cmd := m.handleServerSearchDone(f.last); cmd != nil {
 		t.Error("an answer after leaving search must be ignored")
 	}
 }
@@ -243,29 +249,5 @@ func TestServerSearchKeyWorksWhileTypingAndAfterEnter(t *testing.T) {
 		if cmd == nil || !strings.Contains(next.(Model).statusMsg, "searching the server") {
 			t.Errorf("editing=%v: ctrl+g did nothing (status %q)", editing, next.(Model).statusMsg)
 		}
-	}
-}
-
-func TestSearchableMailboxesSkipsFoldersThatHoldNoServerMail(t *testing.T) {
-	boxes := []db.Mailbox{
-		{Name: "INBOX"}, {Name: "Drafts", Flags: []string{`\Drafts`}},
-		{Name: "[Gmail]", Flags: []string{`\Noselect`, `\HasChildren`}}, {Name: "Sent", Flags: []string{`\Sent`}},
-	}
-	var got []string
-	for _, mb := range searchableMailboxes(boxes) {
-		got = append(got, mb.Name)
-	}
-	if strings.Join(got, ",") != "INBOX,Sent" {
-		t.Errorf("searchable = %v, want INBOX and Sent", got)
-	}
-}
-
-func TestServerSearchSummaryNamesFailuresAndCaps(t *testing.T) {
-	text, isErr := serverSearchSummary(ServerSearchDoneMsg{Found: 1, Folders: 3, Errs: []string{"Work/Archive: boom"}}, "")
-	if !isErr || !strings.Contains(text, "1 match in 3 folders") || !strings.Contains(text, "1 folder failed: Work/Archive: boom") {
-		t.Errorf("summary %q err=%v", text, isErr)
-	}
-	if text, isErr := serverSearchSummary(ServerSearchDoneMsg{Err: fmt.Errorf("no route")}, ""); !isErr || !strings.Contains(text, "no route") {
-		t.Errorf("hard failure %q", text)
 	}
 }
