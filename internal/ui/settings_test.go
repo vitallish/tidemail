@@ -1868,3 +1868,26 @@ func TestSettingsCLISwitchesToggleAndApply(t *testing.T) {
 		t.Fatalf("toggles not applied: %+v", got)
 	}
 }
+
+func TestSettingsLivePreviewServerToggleIsOffByDefaultAndSaves(t *testing.T) {
+	cfg := config.DefaultConfig()
+	s := newSettings(cfg, settingsUpdateState{})
+	if s.ApplyTo(cfg).Display.ComposePreviewServer {
+		t.Fatal("the live preview server must start off")
+	}
+	s.setActiveSection(ssEditor)
+	s.setFocusedPane(settingsPaneDetail)
+	s.setFocusedField(sfComposePreviewServer)
+	on, _, _ := s.Update(tea.KeyMsg{Type: tea.KeySpace}, DefaultKeys)
+	if !on.ApplyTo(cfg).Display.ComposePreviewServer {
+		t.Fatal("Space must turn it on")
+	}
+	off, _, _ := on.Update(tea.KeyMsg{Type: tea.KeyEnter}, DefaultKeys)
+	if off.ApplyTo(cfg).Display.ComposePreviewServer {
+		t.Fatal("Enter must turn it off again")
+	}
+	cfg.Display.ComposePreviewServer = true
+	if !newSettings(cfg, settingsUpdateState{}).ApplyTo(config.DefaultConfig()).Display.ComposePreviewServer {
+		t.Fatal("an enabled setting must be read from config")
+	}
+}

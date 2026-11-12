@@ -521,3 +521,19 @@ func TestComposeSearchRegexDefaultAndPersistence(t *testing.T) {
 		}
 	}
 }
+
+func TestComposePreviewServerDefaultsOffAndSurvivesSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	if cfg.Display.ComposePreviewServer {
+		t.Fatal("the live preview server must be off by default")
+	}
+	cfg.Display.ComposePreviewServer = true
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	if err != nil || !got.Display.ComposePreviewServer {
+		t.Fatalf("round trip lost compose_preview_server: %+v (%v)", got.Display, err)
+	}
+}

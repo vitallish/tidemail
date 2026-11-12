@@ -721,10 +721,17 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 		if !c.preview.live {
 			return c, nil, false // a stale tick from an earlier composer
 		}
-		return c.refreshLivePreview(), previewTick(), false
+		c = c.refreshLivePreview()
+		if !c.preview.live {
+			return c, nil, false // the server went away; end the chain
+		}
+		return c, previewTick(), false
 	}
 	if done, ok := msg.(draftPreviewMsg); ok {
 		c.statusMsg, c.isErr = "Preview opened in browser", false
+		if done.note != "" {
+			c.statusMsg = done.note
+		}
 		if done.err != nil {
 			c.statusMsg, c.isErr = fmt.Sprintf("preview: %v", done.err), true
 		}

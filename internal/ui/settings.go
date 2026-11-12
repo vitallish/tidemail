@@ -92,6 +92,7 @@ const (
 	sfComposeVim
 	sfComposeSearchRegex
 	sfComposeWordWrap
+	sfComposePreviewServer
 	sfComposeSpell
 	sfSpellLang
 	sfSpellDictionary
@@ -361,6 +362,7 @@ type Settings struct {
 	composeVim              bool
 	composeSearchRegex      bool
 	composeWordWrap         bool
+	composePreviewServer    bool
 	composeSpell            bool
 	spellLangIdx            int
 	cliQuitAfterSend        bool
@@ -489,6 +491,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		composeVim:              cfg.Display.ComposeVim,
 		composeSearchRegex:      cfg.Display.ComposeSearchRegex,
 		composeWordWrap:         cfg.Display.ComposeWordWrap,
+		composePreviewServer:    cfg.Display.ComposePreviewServer,
 		composeSpell:            cfg.Display.ComposeSpell,
 		spellLangIdx:            spellLangIndex(cfg.Display.ComposeSpellLang),
 		cliQuitAfterSend:        cfg.Display.CLIQuitAfterSend,
@@ -587,6 +590,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.ComposeVim = s.composeVim
 	cfg.Display.ComposeSearchRegex = s.composeSearchRegex
 	cfg.Display.ComposeWordWrap = s.composeWordWrap
+	cfg.Display.ComposePreviewServer = s.composePreviewServer
 	cfg.Display.ComposeSpell = s.composeSpell
 	cfg.Display.ComposeSpellLang = spellLangs[s.spellLangIdx].id
 	cfg.Display.CLIQuitAfterSend = s.cliQuitAfterSend
@@ -842,7 +846,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		fields = append(fields, sfReadingWidth, sfShowHeaders, sfMarkReadOnOpen, sfMarkReadOnFocus, sfActionableLinks, sfFilterLinks, sfImages)
 		return append(fields, sfBrowser, sfConfirmQuit, sfNotifications, sfMouseSupport)
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposePreviewServer, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1627,6 +1631,15 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 			s.setFocusedField(s.prevField())
 		}
 
+	case sfComposePreviewServer:
+		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.composePreviewServer = !s.composePreviewServer
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
 	case sfComposeSearchRegex:
 		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.composeSearchRegex = !s.composeSearchRegex
@@ -2168,6 +2181,8 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addToggle("Vim keys in compose", s.composeVim, sfComposeVim)
 		b.addToggle("Wrap at word boundaries", s.composeWordWrap, sfComposeWordWrap)
 		b.addHint("Wraps compose text between words instead of mid-word. Display only; your message text is not changed.")
+		b.addToggle("Live preview server (F4)", s.composePreviewServer, sfComposePreviewServer)
+		b.addHint("F4 shows the draft in your browser and updates it as you type, served from a local port on this machine (127.0.0.1 only, secret address, stops with compose). Off: F4 writes a static file; press F4 again to refresh.")
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)
 		b.addHint("Shows an optional Regex toggle in compose Find. Searches stay literal until you enable it in the search bar.")
 		b.addToggle("Spell check in compose (F7)", s.composeSpell, sfComposeSpell)

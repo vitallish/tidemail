@@ -1,9 +1,12 @@
 package ui
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,23 +16,33 @@ import (
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	"github.com/allisonhere/tidemail/internal/mailapp"
+	"github.com/allisonhere/tidemail/internal/previewserver"
 )
 
-// captureBrowser replaces the browser launcher. It records the configured
-// command and how many times a browser was launched.
-func captureBrowser(t *testing.T) (opened func() (path, configured string, launches int)) {
+// browserLog records what the browser launcher was asked to open.
+type browserLog struct {
+	targets    []string
+	configured string
+}
+
+func captureBrowser(t *testing.T) *browserLog {
 	t.Helper()
 	t.Setenv("TMPDIR", t.TempDir())
-	var gotPath, gotCmd string
-	var launches int
+	log := &browserLog{}
 	old := openEmailBrowser
-	openEmailBrowser = func(configured, path string) error {
-		gotPath, gotCmd = path, configured
-		launches++
+	openEmailBrowser = func(configured, target string) error {
+		log.configured = configured
+		log.targets = append(log.targets, target)
 		return nil
 	}
 	t.Cleanup(func() { openEmailBrowser = old })
-	return func() (string, string, int) { return gotPath, gotCmd, launches }
+	return log
+}
+
+func serverMode(t *testing.T) {
+	t.Helper()
+	setComposePreviewServer(true)
+	t.Cleanup(func() { setComposePreviewServer(false) })
 }
 
 func previewCompose(body string) ComposeModel {
@@ -47,11 +60,44 @@ func readFile(t *testing.T, path string) string {
 	return string(b)
 }
 
+// httpGet fetches path (a URL) the way a browser on this machine would.
+func httpGet(t *testing.T, url string) string {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return string(b)
+}
+
+func serverDoc(t *testing.T, srv *previewserver.Server) (title, html string) {
+	t.Helper()
+	var d struct{ Title, HTML string }
+	if err := json.Unmarshal([]byte(httpGet(t, srv.URL()+"doc")), &d); err != nil {
+		t.Fatal(err)
+	}
+	return d.Title, d.HTML
+}
+
 const previewBody = "Results are **in**:\n\n- first\n- second\n\nSee https://example.com/x\n\n⁂\n"
 
-func TestPreviewDocumentKeepsTheHTMLPartVerbatim(t *testing.T) {
+func sentHTML(t *testing.T, body string) string {
+	t.Helper()
+	sent, err := mailapp.PrepareCompose(config.AccountConfig{User: "me@example.com", Signature: "Alice"},
+		db.Draft{To: "reader@example.com", BodyText: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sent.HTMLBody
+}
+
+// ---- static page (the default) -------------------------------------------
+
+func TestPreviewDocumentKeepsTheHTMLPartVerbatimAndRunsNoScript(t *testing.T) {
 	part := "<p>Hi <b>there</b></p>\n<table>\n</table>\n"
-	doc := previewDocument(`Q3 <results> & "more"`, part, time.Time{})
+	doc := previewDocument(`Q3 <results> & "more"`, part)
 	if !strings.Contains(doc, part) {
 		t.Fatalf("the HTML part must appear byte for byte:\n%s", doc)
 	}
@@ -61,71 +107,74 @@ func TestPreviewDocumentKeepsTheHTMLPartVerbatim(t *testing.T) {
 			t.Fatalf("missing %q:\n%s", want, doc)
 		}
 	}
-	if strings.Contains(previewDocument("", part, time.Time{}), "(not sent):") {
+	if strings.Contains(doc, "<script") || strings.Contains(doc, "script-src") || strings.Contains(doc, "refresh") || strings.Contains(doc, "reload") {
+		t.Fatalf("the static page must carry no script and never refresh itself:\n%s", doc)
+	}
+	if strings.Contains(previewDocument("", part), "(not sent):") {
 		t.Fatal("an empty subject must not leave a dangling colon in the title")
 	}
 }
 
-func TestStaticPreviewHasNoScript(t *testing.T) {
-	doc := previewDocument("s", "<p>x</p>\n", time.Time{})
-	if strings.Contains(doc, "<script") || strings.Contains(doc, "script-src") || strings.Contains(doc, "live-until") {
-		t.Fatalf("a static page must carry no script or live marker:\n%s", doc)
-	}
-}
-
-func TestLivePreviewAllowsOnlyItsOwnScript(t *testing.T) {
-	until := time.Unix(1_800_000_000, 0)
-	doc := previewDocument("s", "<p>x</p>\n<script>alert(1)</script>\n", until)
-	sum := sha256.Sum256([]byte(livePreviewScript))
-	wantHash := "script-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
-	for _, want := range []string{wantHash, `<meta name="tidemail-live-until" content="1800000000">`, "<script>" + livePreviewScript + "</script>"} {
-		if !strings.Contains(doc, want) {
-			t.Fatalf("missing %q:\n%s", want, doc)
-		}
-	}
-	csp := previewCSP(true)
-	if strings.Count(csp, "script-src") != 1 || !strings.HasSuffix(csp, wantHash) || strings.Contains(csp, "'unsafe-eval'") || strings.Contains(csp, "script-src 'unsafe-inline'") {
-		t.Fatalf("only the hashed script may run: %s", csp)
-	}
-	if !strings.Contains(doc, "<p>x</p>\n<script>alert(1)</script>\n") {
-		t.Fatal("the draft's own HTML must still appear verbatim (the policy blocks it, the page does not edit it)")
-	}
-}
-
 func TestPreviewDraftWritesExactlyTheHTMLThatSendingUses(t *testing.T) {
-	opened := captureBrowser(t)
+	log := captureBrowser(t)
 	c := previewCompose(previewBody)
 	c.subjectInput.SetValue("Results")
 
 	c, cmd := c.previewDraft()
-	if cmd == nil || c.isErr || !c.preview.live {
-		t.Fatalf("want a live preview: cmd=%v live=%v status=%q", cmd, c.preview.live, c.statusMsg)
+	if cmd == nil || c.isErr || c.preview.live || c.preview.srv != nil {
+		t.Fatalf("static mode: want one command, no tick chain, no server: cmd=%v state=%+v status=%q", cmd, c.preview, c.statusMsg)
 	}
-	batch, ok := cmd().(tea.BatchMsg)
-	if !ok || len(batch) != 2 {
-		t.Fatalf("the first F4 must open the browser and start the tick chain, got %#v", batch)
+	if _, isBatch := cmd().(tea.BatchMsg); isBatch {
+		t.Fatal("static mode must not start a tick chain")
 	}
-	if msg, ok := batch[0]().(draftPreviewMsg); !ok || msg.err != nil {
-		t.Fatalf("opening failed: %#v", msg)
-	}
-	path, _, launches := opened()
-	if launches != 1 || path != c.preview.path {
-		t.Fatalf("launches=%d path=%q want %q", launches, path, c.preview.path)
-	}
-
-	sent, err := mailapp.PrepareCompose(config.AccountConfig{User: "me@example.com", Signature: "Alice"},
-		db.Draft{To: "reader@example.com", BodyText: previewBody})
-	if err != nil {
-		t.Fatal(err)
+	if len(log.targets) != 1 || log.targets[0] != c.preview.path {
+		t.Fatalf("browser targets = %v, want [%s]", log.targets, c.preview.path)
 	}
 	html := readFile(t, c.preview.path)
-	if !strings.Contains(html, sent.HTMLBody) {
-		t.Fatalf("preview lacks the exact HTML part that is sent.\npreview:\n%s\nsent:\n%s", html, sent.HTMLBody)
+	if !strings.Contains(html, sentHTML(t, previewBody)) {
+		t.Fatalf("preview lacks the exact HTML part that is sent:\n%s", html)
 	}
 	for _, want := range []string{"<strong>in</strong>", "<ul>\n<li>first</li>", "-- <br>\nAlice", "Preview (not sent): Results"} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("preview lacks %q", want)
 		}
+	}
+}
+
+func TestStaticPreviewNeverRewritesItself(t *testing.T) {
+	captureBrowser(t)
+	c, _ := previewCompose("first draft\n").previewDraft()
+	path := c.preview.path
+	before := readFile(t, path)
+	c.bodyInput.SetValue("changed text\n")
+	// A stray tick (there is no timer in static mode) and any amount of typing change nothing on disk.
+	c, cmd, _ := c.Update(draftPreviewTickMsg{}, DefaultKeys)
+	if cmd != nil {
+		t.Fatalf("static mode has no tick chain, got a command")
+	}
+	if got := readFile(t, path); got != before || strings.Contains(got, "changed text") {
+		t.Fatalf("the file must only change when F4 is pressed:\n%s", got)
+	}
+}
+
+func TestPressingF4AgainRewritesTheSameFileAndOpensIt(t *testing.T) {
+	log := captureBrowser(t)
+	c, _ := previewCompose("first draft\n").previewDraft()
+	path := c.preview.path
+	c.bodyInput.SetValue("second draft\n")
+	c, cmd, _ := c.Update(tea.KeyMsg{Type: tea.KeyF4}, DefaultKeys)
+	cmd()
+	if c.preview.path != path {
+		t.Fatalf("the file name must stay stable so an open tab can be reloaded: %q -> %q", path, c.preview.path)
+	}
+	if got := readFile(t, path); !strings.Contains(got, "second draft") || strings.Contains(got, "first draft") {
+		t.Fatalf("F4 must rewrite the file:\n%s", got)
+	}
+	if len(log.targets) != 2 {
+		t.Fatalf("F4 opens the browser each time, targets = %v", log.targets)
+	}
+	if _, err := os.Stat(path + ".tmp"); err == nil {
+		t.Fatal("the temporary file must not be left behind")
 	}
 }
 
@@ -141,46 +190,37 @@ func TestPreviewDraftNeedsNoRecipient(t *testing.T) {
 }
 
 func TestPreviewDraftReportsABadBodyAndWritesNothing(t *testing.T) {
-	opened := captureBrowser(t)
+	log := captureBrowser(t)
 	c, cmd := previewCompose("a\n\n⁂\n\nb\n\n⁂\n").previewDraft()
-	if cmd != nil || !c.isErr || !strings.Contains(c.statusMsg, "⁂") || c.preview.path != "" || c.preview.live {
+	if cmd != nil || !c.isErr || !strings.Contains(c.statusMsg, "⁂") || c.preview.path != "" {
 		t.Fatalf("want the marker error and no preview: cmd=%v status=%q state=%+v", cmd, c.statusMsg, c.preview)
 	}
-	if _, _, n := opened(); n != 0 {
+	if len(log.targets) != 0 {
 		t.Fatal("nothing may be opened for an invalid body")
 	}
 }
 
 func TestPreviewDraftUsesTheConfiguredBrowser(t *testing.T) {
-	opened := captureBrowser(t)
+	log := captureBrowser(t)
 	t.Cleanup(func() { setComposeBrowser("") })
-	setComposeBrowser("  firefox --new-window ")
+	setComposeBrowser("  firefox ")
 	_, cmd := previewCompose("hi\n").previewDraft()
-	cmd().(tea.BatchMsg)[0]()
-	if _, configured, n := opened(); n != 1 || configured != "firefox --new-window" {
-		t.Fatalf("configured browser = %q launches=%d", configured, n)
+	cmd()
+	if log.configured != "firefox" {
+		t.Fatalf("configured browser = %q", log.configured)
 	}
 }
 
-func TestPreviewKeyShowsStatusAndSecondPressDoesNotStartAnotherTick(t *testing.T) {
-	opened := captureBrowser(t)
+func TestPreviewKeyShowsAStatusThatNamesTheRefreshKey(t *testing.T) {
+	captureBrowser(t)
 	c := previewCompose("hello\n")
 	c, cmd, exit := c.Update(tea.KeyMsg{Type: tea.KeyF4}, DefaultKeys)
 	if exit || cmd == nil {
 		t.Fatalf("F4 must start the preview: exit=%v cmd=%v", exit, cmd)
 	}
-	batch := cmd().(tea.BatchMsg)
-	c, _, _ = c.Update(batch[0](), DefaultKeys)
-	if c.isErr || c.statusMsg != "Preview opened in browser" {
+	c, _, _ = c.Update(cmd(), DefaultKeys)
+	if c.isErr || !strings.Contains(c.statusMsg, "opened") || !strings.Contains(c.statusMsg, "f4 again") {
 		t.Fatalf("status = %q (err=%v)", c.statusMsg, c.isErr)
-	}
-
-	c, cmd, _ = c.Update(tea.KeyMsg{Type: tea.KeyF4}, DefaultKeys)
-	if _, isBatch := cmd().(tea.BatchMsg); isBatch {
-		t.Fatal("a second F4 must reopen the page without starting a second tick chain")
-	}
-	if _, _, n := opened(); n != 2 {
-		t.Fatalf("the second F4 should open the browser again, launches = %d", n)
 	}
 }
 
@@ -192,82 +232,132 @@ func TestPreviewFailureIsShown(t *testing.T) {
 	}
 }
 
-func startedPreview(t *testing.T, body string) ComposeModel {
-	t.Helper()
-	captureBrowser(t)
-	c, cmd := previewCompose(body).previewDraft()
-	if cmd == nil || !c.preview.live {
-		t.Fatalf("setup: preview did not start: %q", c.statusMsg)
+// ---- live preview server (opt-in) ----------------------------------------
+
+func TestServerModeServesTheExactHTMLAndWritesNoFile(t *testing.T) {
+	log := captureBrowser(t)
+	serverMode(t)
+	c := previewCompose(previewBody)
+	c.subjectInput.SetValue("Results")
+
+	c, cmd := c.previewDraft()
+	srv := c.preview.srv
+	if srv == nil {
+		t.Fatalf("server mode must start a server: status=%q", c.statusMsg)
 	}
-	return c
+	t.Cleanup(srv.Close)
+	if cmd == nil || !c.preview.live || c.preview.path != "" {
+		t.Fatalf("want a live preview and no file: cmd=%v state=%+v", cmd, c.preview)
+	}
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok || len(batch) != 2 {
+		t.Fatalf("the first F4 must open the browser and start the tick chain, got %#v", batch)
+	}
+	batch[0]()
+	if len(log.targets) != 1 || log.targets[0] != srv.URL() || !strings.HasPrefix(log.targets[0], "http://127.0.0.1:") {
+		t.Fatalf("the browser must be sent to the loopback URL, targets = %v", log.targets)
+	}
+	title, html := serverDoc(t, srv)
+	if html != sentHTML(t, previewBody) || title != "Preview (not sent): Results" {
+		t.Fatalf("served doc differs from the sent HTML:\ntitle=%q\n%s", title, html)
+	}
+	if page := httpGet(t, srv.URL()); !strings.Contains(page, sentHTML(t, previewBody)) {
+		t.Fatalf("the first page must carry the sent HTML verbatim:\n%s", page)
+	}
+	dir, _ := emailExportDir()
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("server mode must not write the draft to disk, found %d file(s) in %s", len(entries), filepath.Base(dir))
+	}
 }
 
-func TestLiveTickRewritesOnChangeOnly(t *testing.T) {
-	c := startedPreview(t, "first draft\n")
-	path := c.preview.path
-	before := readFile(t, path)
+func TestServerModeSecondF4ReopensWithoutAnotherTickChain(t *testing.T) {
+	log := captureBrowser(t)
+	serverMode(t)
+	c, _ := previewCompose("hello\n").previewDraft()
+	t.Cleanup(c.preview.srv.Close)
+	url := c.preview.srv.URL()
+	c, cmd, _ := c.Update(tea.KeyMsg{Type: tea.KeyF4}, DefaultKeys)
+	if _, isBatch := cmd().(tea.BatchMsg); isBatch {
+		t.Fatal("a second F4 must not start a second tick chain")
+	}
+	if c.preview.srv.URL() != url || len(log.targets) != 1 || log.targets[0] != url {
+		t.Fatalf("the same server must be reused and reopened: url %q -> %q, targets %v", url, c.preview.srv.URL(), log.targets)
+	}
+}
 
-	// Unchanged draft: nothing is rewritten, even though the tick keeps going.
-	if err := os.WriteFile(path, []byte("SENTINEL"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c, cmd, _ := c.Update(draftPreviewTickMsg{}, DefaultKeys)
-	if cmd == nil {
-		t.Fatal("the tick chain must continue while live")
-	}
-	if got := readFile(t, path); got != "SENTINEL" {
-		t.Fatalf("an unchanged draft must not rewrite the page, got %q", got)
-	}
+func TestLiveTickPushesChangesAndKeepsTheLastGoodPage(t *testing.T) {
+	captureBrowser(t)
+	serverMode(t)
+	c, _ := previewCompose("first draft\n").previewDraft()
+	srv := c.preview.srv
+	t.Cleanup(srv.Close)
 
-	// Edit the body and the subject: the next tick rewrites with both.
 	c.bodyInput.SetValue("second draft **bold**\n")
 	c.subjectInput.SetValue("New subject")
-	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
-	after := readFile(t, path)
-	if !strings.Contains(after, "second draft <strong>bold</strong>") || !strings.Contains(after, "Preview (not sent): New subject") {
-		t.Fatalf("edit not reflected:\n%s", after)
-	}
-	if after == before {
-		t.Fatal("page should have changed")
-	}
-	if _, err := os.Stat(path + ".tmp"); err == nil {
-		t.Fatal("the temporary file must not be left behind")
-	}
-}
-
-func TestLiveTickHeartbeatKeepsTheDeadlineAhead(t *testing.T) {
-	c := startedPreview(t, "same\n")
-	path := c.preview.path
-	if err := os.WriteFile(path, []byte("OLD"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	c.preview.wrote = time.Now().Add(-2 * livePreviewHeartbeat)
-	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
-	got := readFile(t, path)
-	if !strings.Contains(got, "tidemail-live-until") || !strings.Contains(got, "same") {
-		t.Fatalf("an overdue heartbeat must rewrite the unchanged draft:\n%s", got)
-	}
-	if time.Since(c.preview.wrote) > time.Minute {
-		t.Fatal("the write time must be refreshed")
-	}
-}
-
-func TestLiveTickKeepsLastGoodPageWhileBodyIsInvalid(t *testing.T) {
-	c := startedPreview(t, "good draft\n")
-	path := c.preview.path
-	c.bodyInput.SetValue("a\n\n⁂\n\nb\n\n⁂\n") // two markers: does not convert
 	c, cmd, _ := c.Update(draftPreviewTickMsg{}, DefaultKeys)
+	if cmd == nil {
+		t.Fatal("the tick chain must continue while the server is up")
+	}
+	title, html := serverDoc(t, srv)
+	if !strings.Contains(html, "second draft <strong>bold</strong>") || title != "Preview (not sent): New subject" {
+		t.Fatalf("the edit was not pushed: title=%q html=%q", title, html)
+	}
+
+	c.bodyInput.SetValue("a\n\n⁂\n\nb\n\n⁂\n") // two markers: does not convert
+	c, cmd, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
 	if cmd == nil || c.isErr {
-		t.Fatalf("an invalid body mid-typing must not stop or flag the live preview: cmd=%v status=%q", cmd, c.statusMsg)
+		t.Fatalf("an invalid body mid-typing must not stop or flag the preview: cmd=%v status=%q", cmd, c.statusMsg)
 	}
-	if got := readFile(t, path); !strings.Contains(got, "good draft") {
-		t.Fatalf("the last good page must stay:\n%s", got)
+	if _, html := serverDoc(t, srv); !strings.Contains(html, "second draft") {
+		t.Fatalf("the last good page must stay: %q", html)
 	}
-	// Fixing the body brings the page up to date.
 	c.bodyInput.SetValue("fixed draft\n")
 	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
-	if got := readFile(t, path); !strings.Contains(got, "fixed draft") {
-		t.Fatalf("the page must follow the fix:\n%s", got)
+	if _, html := serverDoc(t, srv); !strings.Contains(html, "fixed draft") {
+		t.Fatalf("the page must follow the fix: %q", html)
+	}
+}
+
+func TestLiveTickTouchesTheServerSoItDoesNotIdleOut(t *testing.T) {
+	captureBrowser(t)
+	serverMode(t)
+	old := startPreviewServer
+	startPreviewServer = func() (*previewserver.Server, error) { return previewserver.Start(400 * time.Millisecond) }
+	t.Cleanup(func() { startPreviewServer = old })
+	c, _ := previewCompose("x\n").previewDraft()
+	srv := c.preview.srv
+	t.Cleanup(srv.Close)
+	for i := 0; i < 6; i++ { // 900 ms of ticks: well past the 400 ms idle limit
+		time.Sleep(150 * time.Millisecond)
+		c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
+		if !srv.Alive() {
+			t.Fatal("ticks must keep the server alive")
+		}
+	}
+	// Once the composer stops ticking (it closed), the server ends by itself.
+	deadline := time.Now().Add(3 * time.Second)
+	for srv.Alive() && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if srv.Alive() {
+		t.Fatal("the server must shut itself down after the ticks stop")
+	}
+}
+
+func TestLiveTickEndsWhenTheServerIsGoneAndF4StartsANewOne(t *testing.T) {
+	captureBrowser(t)
+	serverMode(t)
+	c, _ := previewCompose("x\n").previewDraft()
+	first := c.preview.srv
+	first.Close()
+	c, cmd, _ := c.Update(draftPreviewTickMsg{}, DefaultKeys)
+	if cmd != nil || c.preview.live || !c.isErr || !strings.Contains(c.statusMsg, "live preview stopped") {
+		t.Fatalf("a dead server must end the chain and say so: cmd=%v live=%v status=%q", cmd, c.preview.live, c.statusMsg)
+	}
+	c, cmd, _ = c.Update(tea.KeyMsg{Type: tea.KeyF4}, DefaultKeys)
+	t.Cleanup(c.preview.srv.Close)
+	if cmd == nil || c.preview.srv == first || !c.preview.srv.Alive() || !c.preview.live {
+		t.Fatalf("F4 must start a fresh server: %+v", c.preview)
 	}
 }
 
@@ -275,23 +365,36 @@ func TestStaleTickIsIgnoredWhenNotLive(t *testing.T) {
 	captureBrowser(t)
 	c := previewCompose("x\n")
 	c, cmd, _ := c.Update(draftPreviewTickMsg{}, DefaultKeys)
-	if cmd != nil || c.preview.path != "" {
-		t.Fatalf("a tick from an earlier composer must end its chain and write nothing: cmd=%v state=%+v", cmd, c.preview)
+	if cmd != nil || c.preview.srv != nil || c.preview.path != "" {
+		t.Fatalf("a tick from an earlier composer must end its chain and do nothing: cmd=%v state=%+v", cmd, c.preview)
 	}
 }
 
-func TestLiveTickStopsAndReportsWhenTheFileCannotBeWritten(t *testing.T) {
-	c := startedPreview(t, "x\n")
-	if err := os.RemoveAll(c.preview.path + ".tmp"); err != nil {
-		t.Fatal(err)
+func TestServerThatCannotStartFallsBackToTheStaticFileAndSaysSo(t *testing.T) {
+	log := captureBrowser(t)
+	serverMode(t)
+	old := startPreviewServer
+	startPreviewServer = func() (*previewserver.Server, error) { return nil, errors.New("listen tcp4: address in use") }
+	t.Cleanup(func() { startPreviewServer = old })
+
+	c, cmd := previewCompose(previewBody).previewDraft()
+	if cmd == nil || c.isErr || c.preview.live || c.preview.srv != nil || c.preview.path == "" {
+		t.Fatalf("want a static preview: cmd=%v state=%+v status=%q", cmd, c.preview, c.statusMsg)
 	}
-	// Make the temp path a non-empty directory so the write fails.
-	if err := os.MkdirAll(c.preview.path+".tmp/sub", 0o700); err != nil {
-		t.Fatal(err)
+	c, _, _ = c.Update(cmd(), DefaultKeys)
+	if !strings.Contains(c.statusMsg, "static file") || !strings.Contains(c.statusMsg, "address in use") {
+		t.Fatalf("the fallback must be explained: %q", c.statusMsg)
 	}
-	c.bodyInput.SetValue("changed\n")
-	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
-	if c.preview.live || !c.isErr || !strings.Contains(c.statusMsg, "live preview stopped") {
-		t.Fatalf("a write failure must stop the live preview and say so: live=%v status=%q", c.preview.live, c.statusMsg)
+	if len(log.targets) != 1 || log.targets[0] != c.preview.path || !strings.Contains(readFile(t, c.preview.path), sentHTML(t, previewBody)) {
+		t.Fatalf("the static file must be written and opened: %v", log.targets)
+	}
+}
+
+func TestServerModeOffByDefault(t *testing.T) {
+	if composePreviewServer {
+		t.Fatal("the live preview server must be off unless configured")
+	}
+	if config.DefaultConfig().Display.ComposePreviewServer {
+		t.Fatal("DefaultConfig must leave the live preview server off")
 	}
 }

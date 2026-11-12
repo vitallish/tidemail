@@ -216,6 +216,8 @@ type DisplayConfig struct {
 	ComposeWordWrap         bool   `toml:"compose_word_wrap"`    // wrap compose text at word boundaries (on by default)
 	ComposeSpell            bool   `toml:"compose_spell"`        // offline spell check in compose (off by default)
 	ComposeSpellLang        string `toml:"compose_spell_lang"`   // spell check language code; empty means English
+	// ComposePreviewServer makes F4 serve a live preview from a local server instead of a static file (off by default).
+	ComposePreviewServer bool `toml:"compose_preview_server"`
 	// Interactive CLI only; scripted commands ignore these.
 	CLIQuitAfterSend bool               `toml:"cli_quit_after_send"` // leave `tidemail cli` after a successful send or draft
 	CLISkipReview    bool               `toml:"cli_skip_review"`     // skip the wizard's review step when undo or a draft makes it safe
