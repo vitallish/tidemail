@@ -8,6 +8,9 @@ All notable changes to TideMail are documented in this file.
 
 ### Fixed
 
+- Inline images were blank inside tmux: the Kitty graphics escapes were sent
+  raw and tmux dropped them. They are now wrapped in tmux's DCS passthrough
+  (needs `allow-passthrough on`).
 - TideMail would not start on Windows since v1.8.0: it exited with `error
   opening database: init db: SQL logic error: out of memory (1)`. The database
   path was handed to SQLite as `file://C:/...`, so SQLite took `C:` for a host
