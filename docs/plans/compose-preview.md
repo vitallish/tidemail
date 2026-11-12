@@ -72,32 +72,40 @@ that would be sent in the browser, the way the reader's "view message in browser
 - Whether the preview should also show To/Subject as a header block. Left out: the point
   is the body HTML, and extra visible content would break "byte for byte".
 
-## Addendum 2026-11-12: live updates
+## Addendum 2026-11-12 (revised): static by default, live server opt-in
 
-Owner request: the preview should refresh as the draft changes, not only on each F4.
+Owner decisions, same day, after trying the first live version (file rewrite plus a
+self-reloading page): the 2 s reload repaint is annoying, so the reload approach is dropped.
 
-- First `F4` writes the preview file and opens it, as before, and starts a 1 s tick in
-  compose. Each tick compares the subject and body with what was last written; on a change
-  it rewrites the same file (temp file + rename, so the browser never reads half a page).
-  Pressing `F4` again rewrites and re-opens (for a closed tab).
-- The page carries a small script that calls `location.reload()` every 2 s (scroll position
-  is kept) while a `live-until` meta timestamp is in the future. Every write sets it
-  3 minutes ahead and a 60 s heartbeat keeps extending it while compose is open; once
-  compose closes, the page stops reloading by itself within 3 minutes. A tab in the
-  background does not reload.
-- A body that does not convert (two `⁂` markers while typing) leaves the last good page in
-  place; F4 reports the error.
-- CSP gains `script-src 'sha256-<hash of that script>'` only. Anything else in the draft
-  (including a typed `<script>`) stays blocked.
+- **Default (unchanged from the first version):** `F4` writes the preview to a file and opens
+  it. Nothing refreshes it and tidemail never writes it on its own; press `F4` again to
+  rewrite the file and open it again. No script in the page, no timer in compose. The file
+  keeps a stable name per composer so an open tab can be refreshed with the browser's reload.
+  This is also the fallback whenever the server cannot be used.
+- **Opt-in:** `[display] compose_preview_server = true` (default false), also a toggle in
+  Settings -> Editor ("Live preview server"). `F4` then starts a small local HTTP server
+  and opens `http://127.0.0.1:<port>/<token>/`. While compose is open a 1 s tick pushes a
+  change event (server-sent events); the page fetches the new HTML and swaps it in place:
+  no reload, no repaint, scroll kept. Nothing is written to disk in this mode.
+- **Guardrails:** loopback only (`127.0.0.1`, random port); a random 128-bit token in the
+  path, anything else is a 404; the `Host` header must be exactly the loopback address and
+  port (stops DNS rebinding); GET only; no CORS headers; `Cache-Control: no-store` and
+  `Referrer-Policy: no-referrer` so the token is not leaked; the page policy allows one
+  script by hash plus `connect-src 'self'`, so a `<script>` typed into the draft stays
+  blocked; content is held in memory.
+- **Lifetime:** one server per composer, started by the first `F4`. Each compose tick
+  touches it; with no touch for 10 s (compose closed) it shuts itself down. It always ends
+  with tidemail. If it cannot start (no loopback, port error) the preview falls back to the
+  static file and the status line says so.
+- **Rejected:** keeping the self-reloading file as the live mode (the repaint); a server on
+  by default (a listening port should be a choice); writing the preview to disk in server
+  mode (not needed, and keeps the draft off disk).
+- **Known difference:** in server mode the page swaps the HTML part into the document with
+  `innerHTML`, so the browser re-parses it. The first page load carries it verbatim; both
+  are the same HTML the message is sent with. Stated in the guide.
 
-| Choice | Rejected | Why |
-|---|---|---|
-| Rewrite the file and reload from a script | Loopback HTTP server with change polling or SSE | No listening socket for a private draft (it would need a random path token and a Host check), less code. Cost: a reload every 2 s, visible as a brief repaint. Revisit if it annoys. |
-| Reload on a timer | Reload only when changed | A `file://` page cannot read a sibling file (CORS), so it cannot tell. The tick on the tidemail side already avoids rewriting when nothing changed. |
-| Live-until timestamp | Reload forever | A page left open after compose closed would otherwise reload a stale file indefinitely. |
-
-Steps: `previewDocument(subject, html, liveUntil)` (zero = static page); an atomic
-`writePreviewFile`; `previewDraft` writes synchronously and only the browser launch is
-async; `draftPreviewTickMsg` handling in `ComposeModel.Update`; tests for the script hash in
-the CSP, no reload script in a static page, rewrite-on-change, no rewrite when unchanged,
-heartbeat after 60 s, tick chain ends when not live. Docs: guide, help text, CHANGELOG.
+Steps: new package `internal/previewserver` (server, token, host check, SSE, idle shutdown;
+tests incl. Host/token/GET-only/loopback/expiry/SSE delivery); compose uses it when the
+setting is on and falls back to the file; remove `livePreviewScript`, the live-until meta
+and the heartbeat; config field, Settings toggle, injection like `setComposeBrowser`; tests;
+guide, README, CHANGELOG, help text; check the real server in headless Chromium.
