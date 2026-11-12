@@ -253,7 +253,8 @@ func mdTable(b *strings.Builder, table *xhtml.Node) {
 			if c.Type != xhtml.ElementNode {
 				continue
 			}
-			if c.DataAtom == atom.Tr {
+			switch c.DataAtom {
+			case atom.Tr:
 				var cells []string
 				for d := c.FirstChild; d != nil; d = d.NextSibling {
 					if d.Type == xhtml.ElementNode && (d.DataAtom == atom.Td || d.DataAtom == atom.Th) {
@@ -264,7 +265,7 @@ func mdTable(b *strings.Builder, table *xhtml.Node) {
 				if len(cells) > 0 {
 					rows = append(rows, cells)
 				}
-			} else if c.DataAtom == atom.Thead || c.DataAtom == atom.Tbody || c.DataAtom == atom.Tfoot {
+			case atom.Thead, atom.Tbody, atom.Tfoot:
 				walk(c)
 			}
 		}
