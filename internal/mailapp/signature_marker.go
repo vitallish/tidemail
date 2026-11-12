@@ -10,6 +10,7 @@ import (
 	"github.com/allisonhere/tidemail/internal/smtp"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
@@ -55,7 +56,9 @@ func composeBody(body, signature string) (string, string, error) {
 			return "", "", fmt.Errorf("place ⁂ alone on a line, or delete it to omit the signature")
 		}
 		source := []byte(body)
-		md := goldmark.New(goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(signatureRenderer{}, 100))))
+		// GFM here too: every new message carries the marker, so without it pipe
+		// tables only rendered for bodies that deleted the marker.
+		md := goldmark.New(goldmark.WithExtensions(extension.GFM), goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(signatureRenderer{}, 100))))
 		doc := md.Parser().Parse(text.NewReader(source))
 		var marker ast.Node
 		for node := doc.FirstChild(); node != nil; node = node.NextSibling() {
