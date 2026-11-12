@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -397,5 +401,107 @@ func TestServerModeOffByDefault(t *testing.T) {
 	}
 	if config.DefaultConfig().Display.ComposePreviewServer {
 		t.Fatal("DefaultConfig must leave the live preview server off")
+	}
+}
+
+// ---- inline images in the preview ----------------------------------------
+
+func smallPNG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{uint8(x), uint8(y), 99, 255})
+		}
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+func attach(c ComposeModel, name string, data []byte) ComposeModel {
+	c.attachments = append(c.attachments, attachmentFile{Name: name, Data: data})
+	return c
+}
+
+func TestPreviewPolicyAllowsRemoteImagesButNothingElse(t *testing.T) {
+	if !strings.Contains(draftPreviewCSP, "img-src data: https: http:") || !strings.Contains(draftPreviewCSP, "default-src 'none'") {
+		t.Fatalf("policy = %s", draftPreviewCSP)
+	}
+	for _, bad := range []string{"script-src", "connect-src", "frame-src", "unsafe-eval"} {
+		if strings.Contains(draftPreviewCSP, bad) {
+			t.Errorf("the static preview policy must not allow %q: %s", bad, draftPreviewCSP)
+		}
+	}
+}
+
+func TestStaticPreviewInlinesAttachedImagesAndNeverShowsThePath(t *testing.T) {
+	captureBrowser(t)
+	c := attach(previewCompose("Look: ![The logo](logo.png)\n"), "logo.png", smallPNG(t, 120, 40))
+	c, cmd := c.previewDraft()
+	if cmd == nil || c.isErr {
+		t.Fatalf("status = %q", c.statusMsg)
+	}
+	html := readFile(t, c.preview.path)
+	for _, want := range []string{`src="data:image/png;base64,`, `alt="The logo"`, `width="120" height="40"`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("preview lacks %q:\n%.400s", want, html)
+		}
+	}
+	if strings.Contains(html, "logo.png") {
+		t.Fatal("the attachment name must not appear in the page")
+	}
+}
+
+func TestPreviewNamesAnUnattachedImageButStillOpens(t *testing.T) {
+	log := captureBrowser(t)
+	c, cmd := previewCompose("![gone](gone.png) and ![p](/home/me/x.png)\n").previewDraft()
+	if cmd == nil || c.isErr {
+		t.Fatalf("a problem image must not stop the preview: status=%q", c.statusMsg)
+	}
+	c, _, _ = c.Update(cmd(), DefaultKeys)
+	if !strings.Contains(c.statusMsg, "gone.png") || !strings.Contains(c.statusMsg, "file paths are not supported") {
+		t.Fatalf("the status must name the problems: %q", c.statusMsg)
+	}
+	if len(log.targets) != 1 {
+		t.Fatal("the page must still open")
+	}
+}
+
+func TestLivePreviewFollowsAnImageBeingAttachedAndFixed(t *testing.T) {
+	captureBrowser(t)
+	serverMode(t)
+	c, _ := previewCompose("Here: ![logo](logo.png)\n").previewDraft()
+	srv := c.preview.srv
+	t.Cleanup(srv.Close)
+	if _, html := serverDoc(t, srv); strings.Contains(html, "data:image") {
+		t.Fatal("nothing is attached yet")
+	}
+	if c.preview.problem == "" {
+		t.Fatal("the missing image must be recorded as a problem")
+	}
+
+	// Attaching the file is not a text edit: the tick must still notice and refresh.
+	c = attach(c, "logo.png", smallPNG(t, 80, 80))
+	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
+	if _, html := serverDoc(t, srv); !strings.Contains(html, `src="data:image/png;base64,`) {
+		t.Fatalf("the attached image must appear in the live page:\n%.300s", html)
+	}
+	if c.preview.problem != "" || c.isErr || !strings.Contains(c.statusMsg, "images fixed") {
+		t.Fatalf("the status must say the problem went away: %q (err=%v)", c.statusMsg, c.isErr)
+	}
+
+	// Writing a bad reference while live reports it once, in the status line.
+	c.bodyInput.SetValue("Here: ![logo](logo.png) ![x](nope.png)\n")
+	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
+	if !c.isErr || !strings.Contains(c.statusMsg, "nope.png") {
+		t.Fatalf("status = %q (err=%v)", c.statusMsg, c.isErr)
+	}
+	c.statusMsg = "cleared by the user"
+	c, _, _ = c.Update(draftPreviewTickMsg{}, DefaultKeys)
+	if c.statusMsg != "cleared by the user" {
+		t.Fatal("an unchanged problem must not be re-announced on every tick")
 	}
 }

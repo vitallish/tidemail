@@ -380,3 +380,11 @@ func TestPlainTextHidesEverythingButRemoteImages(t *testing.T) {
 		}
 	}
 }
+
+func TestAltTextWithMarkupIsFlattenedInMessages(t *testing.T) {
+	r := NewResolver(ModeSend, nil)
+	convert(t, r, "![The *big* `figure`](missing.png)")
+	if p := strings.Join(r.Problems(), " | "); !strings.Contains(p, "missing.png") || !strings.Contains(p, "![The big figure](missing.png)") {
+		t.Fatalf("problems: %q", p)
+	}
+}
