@@ -575,6 +575,9 @@ Choose **Settings → Display → Reading → Images** (`Auto` or `Off`) and pre
 `Ctrl+S` to save. The change takes effect immediately; remote images still require
 `i` to load. The setting also shows whether inline images are supported.
 
+Inside tmux, TideMail wraps its graphics escapes in tmux's passthrough, which needs
+`set -g allow-passthrough on` in `tmux.conf` (tmux 3.3+). Without it the images stay blank.
+
 TideMail picks the graphics mode from your terminal's environment, and
 recognises Herdr automatically. If that finds nothing (for example inside another
 terminal multiplexer), it asks the terminal at startup whether it supports Kitty
