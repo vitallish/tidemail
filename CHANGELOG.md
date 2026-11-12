@@ -6,6 +6,15 @@ All notable changes to TideMail are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Markdown pipe tables in a message are sent as real HTML tables (they used to go
+  out as literal `| a | b |` text), with column alignment. New
+  `compose_table_style` in `[display]` (also **Settings → Editor → Table style**)
+  adds borders and cell padding to them as inline styles that Gmail honours:
+  `none` (default, unchanged), `basic`, or `custom` with your own CSS in
+  `compose_table_css` (config file only). See "Tables in messages" in the guide.
+
 ### Fixed
 
 - TideMail would not start on Windows since v1.8.0: it exited with `error
@@ -18,11 +27,6 @@ All notable changes to TideMail are documented in this file.
 
 ### Added
 
-- `compose_table_style` in `[display]` (also **Settings → Editor → Table style**)
-  adds borders and cell padding to Markdown tables in sent mail, as inline
-  styles that Gmail honours: `none` (default, unchanged), `basic`, or `custom`
-  with your own CSS in `compose_table_css` (config file only). See "Tables in
-  messages" in the guide.
 - Select and copy text in the reading pane with the mouse. With Mouse support on,
   drag over text and press `Ctrl+C` to copy it; dragging past the top or bottom
   scrolls and extends the selection, and keyboard navigation clears it. Thanks to
