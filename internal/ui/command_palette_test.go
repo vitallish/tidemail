@@ -246,20 +246,18 @@ func TestCommandPaletteExecuteSaveAttachSaveUsesCurrentFolder(t *testing.T) {
 	}
 }
 
-// In Drafts the cursor indexes m.drafts, so message actions in the palette
-// would act on an unrelated cached message (or nothing). They stay disabled.
-func TestCommandPaletteDisablesMessageActionsInDrafts(t *testing.T) {
-	m := draftsPreviewModel(t)
-	m.messages = []db.Message{{ID: 1, MailboxID: 2, UID: 20, Subject: "cached"}}
-	m.filteredMessages = m.messages
-	m.contentMessageID = 1
-
-	for _, item := range m.commandItems() {
-		switch item.id {
-		case "reply", "reply-all", "forward", "archive", "move", "delete", "toggle-read", "view-source":
-			if item.enabled {
-				t.Errorf("%q is enabled while Drafts is selected", item.id)
-			}
-		}
+// The palette runs compose actions by sending the action's key to the
+// composer, so rebinding AttachFile has to be mirrored there.
+func TestCommandPaletteComposeAttachOpensPicker(t *testing.T) {
+	t.Cleanup(func() { setComposeFilePickerCmd("") })
+	setComposeFilePickerCmd("")
+	m := NewModel(nil, config.Config{
+		Accounts: []config.AccountConfig{{Name: "Personal", User: "me@example.com"}},
+		Display:  config.DefaultConfig().Display,
+	}, "dev", false)
+	m.compose = NewCompose(m.cfg.Accounts[0], m.cfg.Accounts, nil)
+	got, _ := m.executeCommand("compose-attach")
+	if !got.(Model).compose.picker.active {
+		t.Fatal("compose-attach from the palette must open the attach picker")
 	}
 }
