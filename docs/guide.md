@@ -206,6 +206,32 @@ parentheses. A value that cannot be read, such as `after:2026-0` while you are
 still typing it, is ignored until it is complete. The `tidemail messages search`
 command takes the same operators.
 
+### Searching the server
+
+Search normally looks only at mail TideMail has already downloaded. While a
+search is on screen (typing, or after `Enter`), press `Ctrl+G` (or run
+**Search the server for the current search** from the command palette) to ask
+the mail server as well:
+
+- It searches every folder of the account whose folder or account row is
+  highlighted in the sidebar (every account, if a row that spans accounts such
+  as the unified inbox is highlighted).
+- Matches you do not have yet are downloaded, newest first, up to 50 per
+  folder; the status line says how many more were left. Narrow the search
+  (`from:`, `after:`) to reach the rest.
+- The normal search then runs again over the larger cache, so the results, order,
+  tags and `has:attachment` work as for any search.
+
+What the server can search is words, `subject:`, `from:`, `to:`, `cc:`, `body:`,
+dates (whole days, by the message's `Date` header), `is:unread`, `is:read`,
+`is:starred`, `OR` and `-`. Tags and `has:attachment` are never sent: IMAP has no
+attachment test and tags are local to TideMail. They still work in a server
+search as long as something else narrows it (`from:ann has:attachment`); a search
+with nothing but them (`has:attachment`) is refused instead of downloading a whole
+folder. The server may match words differently from TideMail (some match any part
+of a word, some only whole words), so a few downloaded messages may not appear in
+the local results.
+
 Type `#` and a tag name to search by the tags shown on message rows:
 `#github`, `#billing`, or any other category, and `#reply`, `#urgent`, or
 `#important`. Tags match as you type (`#git` already finds `#github`), several

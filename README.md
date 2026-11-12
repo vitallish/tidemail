@@ -221,6 +221,7 @@ a key. TideMail keeps the help screen inside the app and lets you search it.
   a group.
 - Press `/` to search the local message cache across accounts. Operators narrow it:
   `from:ann after:7d has:attachment`, `OR`, `-exclude`, `"exact phrase"`.
+  `Ctrl+G` also searches the server for mail you have not downloaded.
 - Use `*` for a server-backed star. The next sync picks up star changes from
   Gmail and other clients.
 - Open a message and press `r` to reply, `Ctrl+R` to reply all, `f` to forward, or `Ctrl+U` to use its
