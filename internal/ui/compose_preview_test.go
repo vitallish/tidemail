@@ -159,7 +159,8 @@ func TestStaticPreviewNeverRewritesItself(t *testing.T) {
 
 func TestPressingF4AgainRewritesTheSameFileAndOpensIt(t *testing.T) {
 	log := captureBrowser(t)
-	c, _ := previewCompose("first draft\n").previewDraft()
+	c, first := previewCompose("first draft\n").previewDraft()
+	first() // the browser launch runs as a command
 	path := c.preview.path
 	c.bodyInput.SetValue("second draft\n")
 	c, cmd, _ := c.Update(tea.KeyMsg{Type: tea.KeyF4}, DefaultKeys)
