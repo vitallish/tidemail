@@ -89,6 +89,8 @@ One inbox, 51 built-in themes in 23 families — Catppuccin, Tokyo Night, Rosé 
   `F6` opens canned replies (six built-ins, plus any `.md` or `.txt` files in
   `~/.config/tidemail/templates`) with the recipient's name filled in; see
   [Templates](docs/guide.md#templates).
+  `F4` previews the draft's HTML in your browser before you send
+  (see [Previewing a draft](docs/guide.md#previewing-a-draft-in-the-browser)).
 - **See the pictures, not just the alt text.**   On Ghostty, Kitty, and Rio, images in HTML mail render inline in the reading
   pane, sized to fit and loaded in the background so browsing stays quick.
   Remote images wait until

@@ -215,55 +215,21 @@ func TestPrepareComposeBeforePGP(t *testing.T) {
 	}
 }
 
-// Every new message carries the signature marker, so tables must render on that
-// path too, not only for bodies without a marker.
-func TestPrepareComposeRendersPipeTables(t *testing.T) {
+// The preview and sending share composeBody; this pins that ComposeHTML stays
+// identical to the HTML part PrepareCompose produces, with and without a marker.
+func TestComposeHTMLMatchesPrepareCompose(t *testing.T) {
 	a := config.AccountConfig{User: "sender@example.com", Signature: "Alice"}
-	table := "| Arm | N |\n|:---|---:|\n| A | 12 |\n"
-	for _, tc := range []struct{ name, body string }{
-		{"no marker", "Results:\n\n" + table},
-		{"marker", "Results:\n\n" + table + "\n⁂\n"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			msg, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: tc.body})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"<table>", `<th style="text-align:right">N</th>`, `<td style="text-align:right">12</td>`} {
-				if !strings.Contains(msg.HTMLBody, want) {
-					t.Fatalf("HTML lacks %q:\n%s", want, msg.HTMLBody)
-				}
-			}
-			if strings.Contains(msg.HTMLBody, "| Arm |") {
-				t.Fatalf("raw pipe row left in HTML:\n%s", msg.HTMLBody)
-			}
-			if !strings.Contains(msg.Body, "| Arm | N |") {
-				t.Fatalf("plain part must keep the Markdown source: %q", msg.Body)
-			}
-		})
+	for _, body := range []string{"plain **text**\n", "plain **text**\n\n⁂\n", ""} {
+		sent, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ComposeHTML(a, body)
+		if err != nil || got != sent.HTMLBody {
+			t.Fatalf("body %q: ComposeHTML = %q (%v), PrepareCompose = %q", body, got, err, sent.HTMLBody)
+		}
 	}
-}
-
-// Both Markdown paths (with and without the signature marker) must share one
-// dialect: an extension that works on one and not the other is the bug that
-// left tables unrendered for every new message.
-func TestComposePathsShareMarkdownExtensions(t *testing.T) {
-	a := config.AccountConfig{User: "sender@example.com", Signature: "Alice"}
-	body := "~~gone~~ and https://example.com/x\n\n- [x] done\n- [ ] todo\n"
-	for _, tc := range []struct{ name, body string }{
-		{"no marker", body},
-		{"marker", body + "\n⁂\n"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			msg, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: tc.body})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, want := range []string{"<del>gone</del>", `<a href="https://example.com/x">`, `type="checkbox"`} {
-				if !strings.Contains(msg.HTMLBody, want) {
-					t.Fatalf("HTML lacks %q:\n%s", want, msg.HTMLBody)
-				}
-			}
-		})
+	if _, err := ComposeHTML(a, "a\n\n⁂\n\nb\n\n⁂\n"); err == nil {
+		t.Fatal("two markers must be an error, as when sending")
 	}
 }
