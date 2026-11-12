@@ -245,3 +245,19 @@ func TestCommandPaletteExecuteSaveAttachSaveUsesCurrentFolder(t *testing.T) {
 		t.Fatalf("unexpected saved content %q", data)
 	}
 }
+
+// The palette runs compose actions by sending the action's key to the
+// composer, so rebinding AttachFile has to be mirrored there.
+func TestCommandPaletteComposeAttachOpensPicker(t *testing.T) {
+	t.Cleanup(func() { setComposeFilePickerCmd("") })
+	setComposeFilePickerCmd("")
+	m := NewModel(nil, config.Config{
+		Accounts: []config.AccountConfig{{Name: "Personal", User: "me@example.com"}},
+		Display:  config.DefaultConfig().Display,
+	}, "dev", false)
+	m.compose = NewCompose(m.cfg.Accounts[0], m.cfg.Accounts, nil)
+	got, _ := m.executeCommand("compose-attach")
+	if !got.(Model).compose.picker.active {
+		t.Fatal("compose-attach from the palette must open the attach picker")
+	}
+}

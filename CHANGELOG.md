@@ -12,6 +12,10 @@ All notable changes to TideMail are documented in this file.
   compose, e.g. `yazi --chooser-file={chooser}`. TideMail suspends while it
   runs and attaches every path the picker writes to the `{chooser}` file. Unix
   only; the built-in browser stays the default.
+- A `[keys]` table in `config.toml` rebinds individual keys by name. Only
+  `AttachFile` (default `Alt+F`) is supported so far, e.g.
+  `AttachFile = ["ctrl+o"]`; the compose footer now shows the attach key and the
+  command palette follows it.
 
 ### Fixed
 
