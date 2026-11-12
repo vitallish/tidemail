@@ -18,6 +18,10 @@ All notable changes to TideMail are documented in this file.
   Tags and `has:attachment` stay local, so they work when combined with another
   term. `tidemail messages search "..." --server [--account NAME]` does the same
   from the command line; agents need the new `messages.search_server` capability.
+- `L` on a message shows its whole conversation from every folder of the account,
+  found by reply headers (`related:<id>`, also `tidemail messages search
+  "related:cache:123" [--server]`); `Ctrl+G` also fetches conversation messages the
+  cache lacks.
 
 ### Fixed
 

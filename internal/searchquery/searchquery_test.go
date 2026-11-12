@@ -67,6 +67,11 @@ func TestParse(t *testing.T) {
 		{`#"To Do"`, "tag=to do"},
 		{"-#spam", "-tag=spam"},
 		{"# #!", ""},
+		{"related:123", "related=123"},
+		{"related:cache:42", "related=42"},
+		{"RELATED:Cache:7 from:ann", "related=7 & from=ann"},
+		{"-related:5", "-related=5"},
+		{"related:", ""},
 		{"has:attachment", "attachment"},
 		{"has:attachments", "attachment"},
 		{"-has:attachment", "-attachment"},
@@ -104,6 +109,10 @@ func TestParseReportsUnusableValues(t *testing.T) {
 		"after:3x":       "after:3x",
 		"has:picture":    "has:picture",
 		"is:important":   "is:important",
+		"related:abc":    "related:abc",
+		"related:0":      "related:0",
+		"related:-3":     "related:-3",
+		"related:cache:": "related:cache:",
 		"is:unread junk": "",
 	}
 	for in, want := range cases {

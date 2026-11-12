@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/allisonhere/tidemail/internal/searchquery"
@@ -29,7 +30,9 @@ var ftsColumns = map[searchquery.Field]string{
 	searchquery.Body:    "body_text",
 }
 
-func compileSearch(q searchquery.Query) compiledSearch {
+// related maps a Related term's value to the row IDs it selects (see
+// RelatedMessageIDs); the caller resolves them because that needs the database.
+func compileSearch(q searchquery.Query, related map[string][]int64) compiledSearch {
 	var c compiledSearch
 	// Only the word being typed gets the prefix operator (see ftsExpr).
 	last := lastPrefixable(q)
@@ -41,7 +44,7 @@ func compileSearch(q searchquery.Query) compiledSearch {
 		}
 		var parts []string
 		for ti, term := range clause {
-			expr, args := termSQL(term, last == [2]int{ci, ti})
+			expr, args := termSQL(term, last == [2]int{ci, ti}, related)
 			if expr == "" {
 				continue
 			}
@@ -86,7 +89,7 @@ func ftsExpr(t searchquery.Term, prefix bool) string {
 }
 
 // termSQL is the condition for one term, or "" if it has none.
-func termSQL(t searchquery.Term, prefix bool) (string, []any) {
+func termSQL(t searchquery.Term, prefix bool, related map[string][]int64) (string, []any) {
 	var expr string
 	var args []any
 	switch {
@@ -119,6 +122,13 @@ func termSQL(t searchquery.Term, prefix bool) (string, []any) {
 		expr = "messages.starred = 1"
 	case t.Field == searchquery.Tag:
 		expr, args = tagPredicate(t.Value)
+	case t.Field == searchquery.Related:
+		// A JSON array keeps the statement short however large the conversation.
+		ids, _ := json.Marshal(related[t.Value])
+		if len(related[t.Value]) == 0 {
+			ids = []byte("[]")
+		}
+		expr, args = "messages.id IN (SELECT value FROM json_each(?))", []any{string(ids)}
 	default:
 		return "", nil
 	}

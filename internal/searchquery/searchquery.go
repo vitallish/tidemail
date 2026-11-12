@@ -11,6 +11,7 @@
 //	after:2026-01-31 before:2026-02-15 on:2026-02-01   (also 7d, 2w, 3m, 1y)
 //	has:attachment   is:unread  is:read  is:starred
 //	#tag                    a tag shown on message rows (local only)
+//	related:123             the conversation of message 123 (also related:cache:123)
 //	-term                   exclude
 //
 // Typing is not an error: a half-typed value ("after:2026-0") is dropped from
@@ -20,6 +21,7 @@ package searchquery
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +42,12 @@ const (
 	Read    Field = "read"
 	Starred Field = "starred"
 	Tag     Field = "tag"
+	// Related selects the messages whose reply headers connect them to message
+	// Value (a row ID). It is expanded to HeaderMatch terms for the server.
+	Related Field = "related"
+	// HeaderMatch is a server-only term: header Key contains Value. The parser
+	// never produces it; related-message expansion does.
+	HeaderMatch Field = "header"
 )
 
 // IsText reports whether the field is matched against message text.
@@ -55,6 +63,7 @@ func (f Field) IsText() bool {
 // term. Quoted marks a phrase, which is not matched as a prefix while typing.
 type Term struct {
 	Field  Field
+	Key    string // header name, for HeaderMatch
 	Value  string
 	Quoted bool
 	Negate bool
@@ -205,6 +214,14 @@ func interpret(tok token, now time.Time) (term Term, ok bool, problem string) {
 			}
 			term.Field, term.Start, term.End = Date, start, end
 			return term, true, ""
+		case "related":
+			id := strings.TrimPrefix(strings.ToLower(value), "cache:")
+			n, err := strconv.ParseInt(id, 10, 64)
+			if err != nil || n <= 0 {
+				return term, false, fmt.Sprintf("related:%s: use a message ID such as related:123 or related:cache:123", value)
+			}
+			term.Field, term.Value = Related, strconv.FormatInt(n, 10)
+			return term, true, ""
 		case "has":
 			if v := strings.ToLower(value); v == "attachment" || v == "attachments" {
 				term.Field = HasAtt
@@ -230,7 +247,7 @@ func interpret(tok token, now time.Time) (term Term, ok bool, problem string) {
 			return term, false, ""
 		}
 		switch strings.ToLower(name) {
-		case "after", "before", "on", "has", "is":
+		case "after", "before", "on", "has", "is", "related":
 			return term, false, ""
 		}
 	}

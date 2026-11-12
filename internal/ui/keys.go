@@ -34,6 +34,7 @@ type KeyMap struct {
 	PrevLink        key.Binding
 	Search          key.Binding
 	ServerSearch    key.Binding
+	Related         key.Binding
 	UnreadOnly      key.Binding
 	StarredFirst    key.Binding
 	ToggleThreads   key.Binding
@@ -145,6 +146,7 @@ var DefaultKeys = KeyMap{
 	PrevLink:      key.NewBinding(key.WithKeys("alt+p"), key.WithHelp("alt+p", "prev link")),
 	Search:        key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 	ServerSearch:  key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "search the server")),
+	Related:       key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "related messages")),
 	UnreadOnly:    key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "toggle unread only")),
 	StarredFirst:  key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "starred first")),
 	ToggleThreads: key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "threads")),

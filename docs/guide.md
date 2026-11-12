@@ -206,6 +206,19 @@ parentheses. A value that cannot be read, such as `after:2026-0` while you are
 still typing it, is ignored until it is complete. The `tidemail messages search`
 command takes the same operators.
 
+### Related messages
+
+Press `L` on a message (in the list or open in the content pane) to see its whole
+conversation: earlier messages, later ones, and your own replies, from every
+folder of the account, newest first with the folder shown on each row. It is an
+ordinary search whose query is `related:<id>` (the same term works in the search
+box and `tidemail messages search "related:cache:123"`), so you can add to it
+(`related:42 from:ann`), press `Ctrl+G` to also look for conversation messages on
+the server, and `Esc` to leave. Only the reply headers (`Message-ID`,
+`In-Reply-To`, `References`) decide what is related; two messages that merely share
+a subject are not. Messages TideMail has not downloaded appear after `Ctrl+G` (one
+round: if a downloaded message references yet more, press it again).
+
 ### Searching the server
 
 Search normally looks only at mail TideMail has already downloaded. While a

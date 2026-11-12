@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -16,9 +17,10 @@ import (
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
 )
 
-// serverSearchCLIFixture configures one account against an in-memory IMAP
-// server that holds three messages, none of them in the local cache.
-func serverSearchCLIFixture(t *testing.T) {
+// startCLIServer runs an in-memory IMAP server holding raws in INBOX and writes
+// a config and empty cache with one account ("Work", id "acct-1") that reaches it.
+// It returns the account's database ID and INBOX mailbox ID.
+func startCLIServer(t *testing.T, raws []string) (accountID, inboxID int64) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
@@ -47,11 +49,7 @@ func serverSearchCLIFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	for _, raw := range []string{
-		"From: Ann <ann@example.com>\r\nSubject: Invoice one\r\nDate: Mon, 02 Mar 2026 09:00:00 +0000\r\nMessage-ID: <1@t>\r\n\r\nx\r\n",
-		"From: Ann <ann@example.com>\r\nSubject: Invoice two\r\nDate: Tue, 03 Mar 2026 09:00:00 +0000\r\nMessage-ID: <2@t>\r\n\r\nx\r\n",
-		"From: Bob <bob@example.com>\r\nSubject: Lunch\r\nDate: Wed, 04 Mar 2026 09:00:00 +0000\r\nMessage-ID: <3@t>\r\n\r\nx\r\n",
-	} {
+	for _, raw := range raws {
 		if err := client.AppendWithFlags(ctx, "INBOX", []byte(raw), time.Now()); err != nil {
 			t.Fatal(err)
 		}
@@ -67,13 +65,25 @@ func serverSearchCLIFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	id, err := database.AddAccount("acct-1", "Work", "")
+	accountID, err = database.AddAccount("acct-1", "Work", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.UpsertMailbox(db.Mailbox{AccountID: id, Name: "INBOX"}); err != nil {
+	inboxID, err = database.UpsertMailbox(db.Mailbox{AccountID: accountID, Name: "INBOX"})
+	if err != nil {
 		t.Fatal(err)
 	}
+	return accountID, inboxID
+}
+
+// serverSearchCLIFixture: three messages, none in the local cache.
+func serverSearchCLIFixture(t *testing.T) {
+	t.Helper()
+	startCLIServer(t, []string{
+		"From: Ann <ann@example.com>\r\nSubject: Invoice one\r\nDate: Mon, 02 Mar 2026 09:00:00 +0000\r\nMessage-ID: <1@t>\r\n\r\nx\r\n",
+		"From: Ann <ann@example.com>\r\nSubject: Invoice two\r\nDate: Tue, 03 Mar 2026 09:00:00 +0000\r\nMessage-ID: <2@t>\r\n\r\nx\r\n",
+		"From: Bob <bob@example.com>\r\nSubject: Lunch\r\nDate: Wed, 04 Mar 2026 09:00:00 +0000\r\nMessage-ID: <3@t>\r\n\r\nx\r\n",
+	})
 }
 
 type searchEnvelope struct {
@@ -202,5 +212,53 @@ func TestSearchServerNeedsItsOwnAgentCapability(t *testing.T) {
 	}
 	if code, env, raw := runSearch(t, "from:ann", "--server", "--agent", "--json"); code != 0 || env.Data.Total != 2 {
 		t.Fatalf("with the capability: code=%d %s", code, raw)
+	}
+}
+
+func TestRelatedSearchFindsTheConversationFromTheServer(t *testing.T) {
+	// The server holds a conversation (root, reply, my answer) and an unrelated
+	// message with the same subject. Only the reply is cached locally.
+	_, inbox := startCLIServer(t, []string{
+		"From: Ann <ann@example.com>\r\nSubject: Budget\r\nDate: Mon, 02 Mar 2026 09:00:00 +0000\r\nMessage-ID: <root@t>\r\n\r\nx\r\n",
+		"From: Bob <bob@example.com>\r\nSubject: Re: Budget\r\nDate: Tue, 03 Mar 2026 09:00:00 +0000\r\nMessage-ID: <reply@t>\r\nIn-Reply-To: <root@t>\r\nReferences: <root@t>\r\n\r\nx\r\n",
+		"From: Ann <ann@example.com>\r\nSubject: Re: Budget\r\nDate: Wed, 04 Mar 2026 09:00:00 +0000\r\nMessage-ID: <mine@t>\r\nIn-Reply-To: <reply@t>\r\nReferences: <root@t> <reply@t>\r\n\r\nx\r\n",
+		"From: Cy <cy@example.com>\r\nSubject: Budget\r\nDate: Thu, 05 Mar 2026 09:00:00 +0000\r\nMessage-ID: <other@t>\r\n\r\nx\r\n",
+	})
+	database, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.UpsertMessage(db.Message{MailboxID: inbox, UID: 2, Subject: "Re: Budget", MessageID: "<reply@t>", InReplyTo: "<root@t>", References: "<root@t>", Date: time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC)}); err != nil {
+		t.Fatal(err)
+	}
+	replyID, err := database.MessageIDByUID(inbox, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	database.Close()
+
+	query := fmt.Sprintf("related:cache:%d", replyID)
+	// Cached only: just the message we hold.
+	if code, env, raw := runSearch(t, query, "--json"); code != 0 || env.Data.Total != 1 {
+		t.Fatalf("cached: code=%d total=%d %s", code, env.Data.Total, raw)
+	}
+	// With the server: the root and my answer arrive; the same-subject stranger does not.
+	code, env, raw := runSearch(t, query, "--server", "--json")
+	if code != 0 || env.Data.Total != 3 || env.Data.Server == nil || env.Data.Server.Fetched != 2 {
+		t.Fatalf("server: code=%d total=%d server=%+v %s", code, env.Data.Total, env.Data.Server, raw)
+	}
+	var subjects []string
+	for _, it := range env.Data.Items {
+		subjects = append(subjects, it.Subject)
+	}
+	if got := strings.Join(subjects, "|"); strings.Contains(got, "Budget") && strings.Count(got, "Budget") != 3 {
+		t.Fatalf("subjects %q", got)
+	}
+	if code, env, _ := runSearch(t, "cy", "--json"); code != 0 || env.Data.Total != 0 {
+		t.Fatal("the unrelated message with the same subject was downloaded")
+	}
+	// A message that is not cached cannot be followed.
+	if code, _, raw := runSearch(t, "related:cache:9999", "--server", "--json"); code != 1 || !strings.Contains(raw, "not in the cache") {
+		t.Fatalf("unknown message: code=%d %s", code, raw)
 	}
 }
