@@ -550,6 +550,8 @@ send_delay_seconds = 5
 send_max_attempts = 3  # total attempts; 1 disables automatic retries
 compose_vim = true
 compose_word_wrap = true  # wrap compose text between words (default); false wraps at the edge
+compose_table_style = "none"  # inline borders for Markdown tables in sent mail: "none", "basic" or "custom"
+# compose_table_css = "border:1px solid #444;padding:6px 10px"  # cell style for "custom"
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]

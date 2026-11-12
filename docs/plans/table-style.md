@@ -35,12 +35,12 @@ came from that duplication; the styling would be the next thing to be added to o
 
 | Choice | Rejected | Why |
 |---|---|---|
-| Custom goldmark node renderer for table nodes | Post-process the HTML string; a `<style>` block | Decided in #1: string edits break when goldmark output changes; clients strip `<style>`. |
+| Structural change on the goldmark AST: a transformer sets the `style` attribute on table and cell nodes | Post-process the HTML string; a `<style>` block; a full custom table renderer (the #1 wording) | Same reasoning as #1 (string edits break, clients strip `<style>`), but goldmark's own table renderer already appends `text-align` to a node's `style`, so a ~30-line transformer replaces a copied renderer. Changed during implementation, 2026-11-12. |
 | Opt-in, default `none` | Default `basic` | Keeps upstream behaviour unchanged for anyone who does not ask; the owner turns it on in their config. Reversible by flipping the default later. |
 | `none/basic/custom` + `compose_table_css` | One free-form string | Presets are discoverable in docs and settings; the CSS string is only for people who want control. Cost: two keys. |
 | Package-level setter (`smtp`), set once after config load | Pass the style through `Prepare`/`PrepareCompose` | `Prepare` has 5 callers (TUI, CLI, cliform); the repo already uses this pattern (`setEditorVimMode`, `setComposeFilePickerCmd`). Cost: global state, noted in a comment. |
 | One `newMarkdown(opts)` constructor in `smtp`, exported for `mailapp` | Keep two builders | One place for extensions and options; `composeBody` adds only its signature renderer. |
-| Config file only for now | Settings screen entry | Keeps the diff to one topic; a settings row can follow. |
+| Settings screen picker for the style, CSS in the config file only | Config file only | Owner's call (2026-11-12): the style is a three-way choice worth a picker; free-form CSS is not worth a text field in the settings form. |
 
 ## Implementation steps
 
@@ -52,8 +52,11 @@ came from that duplication; the styling would be the next thing to be added to o
    (end of struct, gofmt); round-trip test; default stays empty.
 3. `internal/smtp`: table renderer (priority above the GFM one) emitting the inline
    styles, alignment merged; `SetTableStyle(style, css string)` rebuilds the converter.
-4. Set it where config is loaded for sending: `main.go`, `cli/mail.go`,
-   `cli/interactive.go`, `cli/mail_reads.go` (via one `mailapp.ApplyConfig(cfg)` helper).
+4. Set it where config is loaded for sending: `ui/model.go` (startup and after a settings
+   save) and the two send paths in `cli/mail.go`, with a direct `smtp.SetTableStyle` call
+   (no helper: smaller diff, per the owner). `main.go` warns about an unknown value.
+   Settings screen: a Table style picker under Editor (None/Basic/Custom); the CSS stays
+   config-file only (owner, 2026-11-12).
 5. Tests: none leaves HTML byte-identical to today; basic and custom emit the styles;
    alignment kept; header cells styled; quote in `compose_table_css` escaped; both
    Markdown paths; config round-trip.

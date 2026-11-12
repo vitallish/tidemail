@@ -21,6 +21,7 @@ import (
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	imapClient "github.com/allisonhere/tidemail/internal/imap"
+	"github.com/allisonhere/tidemail/internal/smtp"
 	"github.com/allisonhere/tidemail/internal/update"
 	"github.com/allisonhere/tideui"
 )
@@ -465,6 +466,7 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 	setEditorVimMode(cfg.Display.ComposeVim)
 	setEditorSearchRegex(cfg.Display.ComposeSearchRegex)
 	setEditorWordWrap(cfg.Display.ComposeWordWrap)
+	smtp.SetTableStyle(cfg.Display.ComposeTableStyle, cfg.Display.ComposeTableCSS)
 	setEditorSpell(cfg.Display.ComposeSpell, cfg.Display.ComposeSpellLang, loadSpellWords(database))
 	addSpellNames(accountSpellEntries(cfg))
 
@@ -3572,6 +3574,7 @@ func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 			setEditorVimMode(m.cfg.Display.ComposeVim)
 			setEditorSearchRegex(m.cfg.Display.ComposeSearchRegex)
 			setEditorWordWrap(m.cfg.Display.ComposeWordWrap)
+			smtp.SetTableStyle(m.cfg.Display.ComposeTableStyle, m.cfg.Display.ComposeTableCSS)
 			setEditorSpell(m.cfg.Display.ComposeSpell, m.cfg.Display.ComposeSpellLang, loadSpellWords(m.db))
 			merged, _ := MergedThemeFromConfig(m.cfg)
 			m.setStyles(BuildStyles(merged, m.cfg.Display.Density, m.cfg.Display.PaneCorners))
