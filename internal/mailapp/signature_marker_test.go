@@ -243,3 +243,27 @@ func TestPrepareComposeRendersPipeTables(t *testing.T) {
 		})
 	}
 }
+
+// Both Markdown paths (with and without the signature marker) must share one
+// dialect: an extension that works on one and not the other is the bug that
+// left tables unrendered for every new message.
+func TestComposePathsShareMarkdownExtensions(t *testing.T) {
+	a := config.AccountConfig{User: "sender@example.com", Signature: "Alice"}
+	body := "~~gone~~ and https://example.com/x\n\n- [x] done\n- [ ] todo\n"
+	for _, tc := range []struct{ name, body string }{
+		{"no marker", body},
+		{"marker", body + "\n⁂\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: tc.body})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"<del>gone</del>", `<a href="https://example.com/x">`, `type="checkbox"`} {
+				if !strings.Contains(msg.HTMLBody, want) {
+					t.Fatalf("HTML lacks %q:\n%s", want, msg.HTMLBody)
+				}
+			}
+		})
+	}
+}
