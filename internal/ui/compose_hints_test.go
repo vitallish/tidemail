@@ -244,10 +244,10 @@ func TestComposeVimBodyHintsFollowTheMode(t *testing.T) {
 		enter func()
 		row   string
 	}{
-		{"NORMAL", normal, "esc cancel alt+m maximize ^g grammar / find y yank p put u undo"},
-		{"INSERT", func() { c.bodyInput.ed.StartInsert() }, "esc normal alt+m maximize ^g grammar"},
-		{"VISUAL", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}) }, "esc normal alt+m maximize ^g grammar y yank d delete c change"},
-		{"COMMAND", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}) }, "esc normal alt+m maximize ^g grammar enter run :w send :q cancel"},
+		{"NORMAL", normal, "esc cancel alt+m maximize ^g grammar alt+f attach / find y yank p put u undo"},
+		{"INSERT", func() { c.bodyInput.ed.StartInsert() }, "esc normal alt+m maximize ^g grammar alt+f attach"},
+		{"VISUAL", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")}) }, "esc normal alt+m maximize ^g grammar alt+f attach y yank d delete c change"},
+		{"COMMAND", func() { normal(); key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")}) }, "esc normal alt+m maximize ^g grammar alt+f attach enter run :w send :q cancel"},
 	}
 	var actions string
 	escCol := -1

@@ -34,6 +34,11 @@ type Config struct {
 	// Plugins holds per-plugin user settings for the experimental plugin
 	// system, keyed by plugin ID. A missing entry means every setting is off.
 	Plugins PluginSettingsMap `toml:"plugins,omitempty"`
+
+	// Keys overrides individual key bindings by name, e.g.
+	// AttachFile = ["ctrl+o"]. Only the names the UI lists as overridable are
+	// accepted (see internal/ui/key_overrides.go); anything else is reported.
+	Keys map[string][]string `toml:"keys,omitempty"`
 }
 
 // PluginSettings is one plugin's user settings.
