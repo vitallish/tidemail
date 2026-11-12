@@ -635,21 +635,28 @@ func (c *ComposeModel) pickerAttachSelected() {
 	if entry.isDir {
 		return
 	}
-	path := filepath.Join(c.picker.currentDir, entry.name)
-	data, err := os.ReadFile(path)
+	af, err := c.attachPath(filepath.Join(c.picker.currentDir, entry.name))
 	if err != nil {
-		c.statusMsg = fmt.Sprintf("read: %v", err)
+		c.statusMsg = err.Error()
 		c.isErr = true
 		return
 	}
-	c.attachments = append(c.attachments, attachmentFile{
-		Name: entry.name,
-		Path: path,
-		Data: data,
-	})
-	c.statusMsg = fmt.Sprintf("attached: %s (%s)", entry.name, humanSize(len(data)))
+	c.statusMsg = fmt.Sprintf("attached: %s (%s)", af.Name, humanSize(len(af.Data)))
 	c.isErr = false
 	c.picker.active = false
+}
+
+// attachPath reads the file at path and appends it to the attachments. The
+// error names the path, so a caller attaching several files can report which
+// one failed.
+func (c *ComposeModel) attachPath(path string) (attachmentFile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return attachmentFile{}, fmt.Errorf("read: %w", err)
+	}
+	af := attachmentFile{Name: filepath.Base(path), Path: path, Data: data}
+	c.attachments = append(c.attachments, af)
+	return af, nil
 }
 
 func humanSize(b int) string {
@@ -710,11 +717,13 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 	}
 	// Host intents emitted by the vim body editor: :w/:wq/:x send; :q or a second
 	// Esc in Normal mode cancels (routed through the normal exit/draft-confirm).
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case ripple.SubmitMsg:
 		return c.send()
 	case ripple.CancelMsg:
 		return c, nil, true
+	case filePickerDoneMsg:
+		return c.attachPicked(msg), nil, false
 	}
 	km, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -837,14 +846,8 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 		return c, nil, false
 
 	case keyMatches(km, keys.AttachFile):
-		// Start picker in user's home directory
-		home, err := os.UserHomeDir()
-		startDir := home
-		if err != nil {
-			startDir = "/"
-		}
-		c.openPicker(startDir)
-		return c, nil, false
+		c, cmd := c.startAttachPick()
+		return c, cmd, false
 
 	case keyMatches(km, keys.RemoveAttach):
 		if len(c.attachments) > 0 {

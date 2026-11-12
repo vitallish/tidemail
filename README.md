@@ -476,7 +476,7 @@ shows the `message_raw` and `message_compose` permissions.
 | `Ctrl+Z` | Cancel a send still in its delay, or undo a queued message action |
 | `O` | Open the Outbox |
 | `Ctrl+U` | Unsubscribe while reading; cycle sender while composing |
-| `Alt+F` / `Ctrl+R` | Attach a file while composing; remove the last attachment |
+| `Alt+F` / `Ctrl+R` | Attach a file while composing (built-in browser, or your own via `file_picker_cmd`); remove the last attachment |
 | `Ctrl+D` | Save attachments from the open message |
 | `Ctrl+E` | Show or hide full headers |
 | `Ctrl+O` | View the message source (`c` copies it) |
@@ -550,6 +550,7 @@ send_delay_seconds = 5
 send_max_attempts = 3  # total attempts; 1 disables automatic retries
 compose_vim = true
 compose_word_wrap = true  # wrap compose text between words (default); false wraps at the edge
+file_picker_cmd = "yazi --chooser-file={chooser}"  # optional: your file manager for Alt+F attachments
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]
