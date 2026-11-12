@@ -104,6 +104,10 @@ All notable changes to TideMail are documented in this file.
   box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
   filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
   **Clear search history** is in the command palette.
+- A `[keys]` table in `config.toml` rebinds individual keys by name. Only
+  `AttachFile` (default `Alt+F`) is supported so far, e.g.
+  `AttachFile = ["ctrl+o"]`; the compose footer now shows the attach key and the
+  command palette follows it.
 
 ### Changed
 
