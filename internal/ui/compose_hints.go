@@ -69,13 +69,13 @@ func (c ComposeModel) composeHints(width int, chrome managerChrome) string {
 		if editorSpell != nil {
 			context = append(context, composeHint{"f7", "spell", 9, true})
 		}
+		context = append(context, composeHint{bindingHintLabel(composeAttachKeys), "attach", 10, true})
 		// Not fixed: the preview hint yields to the focused field's own keys (the vim
 		// motions) when the footer is narrow, rather than pushing them out.
 		context = append(context, composeHint{"f4", "preview", 11, false})
 		if c.hasQuoteMarker() {
 			context = append(context, composeHint{"f3", "quote", 10, false})
 		}
-		context = append(context, composeHint{bindingHintLabel(composeAttachKeys), "attach", 10, true})
 		if len(c.attachments) > 0 {
 			context = append(context, composeHint{"^r", "remove", 3, true})
 		}
