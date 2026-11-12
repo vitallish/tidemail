@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	htmlpkg "html"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,14 +118,23 @@ func openEmailHTML(raw []byte, configured string, allowImages bool) (blocked int
 	// even when the original HTML still declares a different charset, without
 	// rewriting its markup. Preserve an existing BOM rather than adding two.
 	html = "\ufeff" + strings.TrimPrefix(html, "\ufeff")
+	if err := writeAndOpenHTML(html, configured); err != nil {
+		return 0, err
+	}
+	return blocked, nil
+}
+
+// writeAndOpenHTML writes html to the private export directory and opens it in
+// the configured browser (or the system default when configured is empty).
+func writeAndOpenHTML(html, configured string) error {
 	dir, err := emailExportDir()
 	if err != nil {
-		return 0, err
+		return err
 	}
 	pruneEmailExports(dir, time.Now(), emailExportMaxAge)
 	file, err := os.CreateTemp(dir, "tidemail-email-*.html")
 	if err != nil {
-		return 0, fmt.Errorf("create temporary HTML: %w", err)
+		return fmt.Errorf("create temporary HTML: %w", err)
 	}
 	path := file.Name()
 	// Remove failed exports immediately; successful ones stay available for
@@ -138,14 +148,37 @@ func openEmailHTML(raw []byte, configured string, allowImages bool) (blocked int
 	_, writeErr := file.WriteString(html)
 	closeErr := file.Close()
 	if writeErr != nil {
-		return 0, fmt.Errorf("write temporary HTML: %w", writeErr)
+		return fmt.Errorf("write temporary HTML: %w", writeErr)
 	}
 	if closeErr != nil {
-		return 0, fmt.Errorf("close temporary HTML: %w", closeErr)
+		return fmt.Errorf("close temporary HTML: %w", closeErr)
 	}
 	if err := openEmailBrowser(configured, path); err != nil {
-		return 0, fmt.Errorf("could not launch browser: %w", err)
+		return fmt.Errorf("could not launch browser: %w", err)
 	}
 	keep = true
-	return blocked, nil
+	return nil
+}
+
+// draftPreviewCSP lets the preview load nothing: no network, no scripts, no
+// frames. Inline styles (the table styling) and data: images are allowed.
+const draftPreviewCSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+
+// previewDocument wraps the HTML part a draft would be sent with in a minimal
+// page. The part is included verbatim; the wrapper adds only the doctype,
+// charset, a title naming the subject, and a policy that blocks all loading.
+func previewDocument(subject, htmlPart string) string {
+	title := "Preview (not sent)"
+	if s := strings.TrimSpace(subject); s != "" {
+		title += ": " + s
+	}
+	return "\ufeff<!doctype html>\n<html><head><meta charset=\"utf-8\">\n" +
+		"<meta http-equiv=\"Content-Security-Policy\" content=\"" + draftPreviewCSP + "\">\n" +
+		"<title>" + htmlpkg.EscapeString(title) + "</title></head>\n<body>\n" +
+		htmlPart + "</body></html>\n"
+}
+
+// openDraftPreview opens the draft's HTML part in the browser.
+func openDraftPreview(subject, htmlPart, configured string) error {
+	return writeAndOpenHTML(previewDocument(subject, htmlPart), configured)
 }

@@ -214,3 +214,22 @@ func TestPrepareComposeBeforePGP(t *testing.T) {
 		t.Fatalf("protected MIME lost prepared signature: %s", raw)
 	}
 }
+
+// The preview and sending share composeBody; this pins that ComposeHTML stays
+// identical to the HTML part PrepareCompose produces, with and without a marker.
+func TestComposeHTMLMatchesPrepareCompose(t *testing.T) {
+	a := config.AccountConfig{User: "sender@example.com", Signature: "Alice"}
+	for _, body := range []string{"plain **text**\n", "plain **text**\n\n⁂\n", ""} {
+		sent, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ComposeHTML(a, body)
+		if err != nil || got != sent.HTMLBody {
+			t.Fatalf("body %q: ComposeHTML = %q (%v), PrepareCompose = %q", body, got, err, sent.HTMLBody)
+		}
+	}
+	if _, err := ComposeHTML(a, "a\n\n⁂\n\nb\n\n⁂\n"); err == nil {
+		t.Fatal("two markers must be an error, as when sending")
+	}
+}

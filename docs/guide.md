@@ -772,6 +772,30 @@ message, while `:q` cancels it.
 Replies and forwards quote the readable text of an HTML message, not its markup,
 and a forward keeps the original's attachments.
 
+### Previewing a draft in the browser
+
+Press `F4` in compose (or choose **Preview draft in browser** from the command
+palette, `Ctrl+P`) to see how the message will look. TideMail opens the HTML part
+of the message exactly as it would be sent: the Markdown rendered to HTML, tables
+and their styling, links, and your signature. It uses your `[display] browser`
+setting, or the system default browser when that is empty.
+
+It works from any field and before you have addressed the message. It does not
+save the draft and does not send anything. The page is a snapshot: change the
+draft and press `F4` again for a fresh one.
+
+The page contains the HTML part byte for byte, inside a minimal document with a
+title (`Preview (not sent): <subject>`) and a policy that stops it loading
+anything from the network. It does not show the plain-text part, attachments,
+PGP signing or encryption, or inline images (drafts cannot carry those yet).
+Mail clients restyle HTML in their own ways, so this is a close preview, not a
+guarantee: Gmail, Outlook and dark-mode clients can still differ.
+
+The file is written to a private folder in your temporary directory (owner-only)
+and removed after an hour, the same as "view message in browser" for received
+mail. If the message body is invalid (for example two `⁂` signature markers), the
+status line says so, as it does when sending.
+
 ### Templates
 
 Press `F6` in compose (the footer shows `f6 templates` in every field) to open
@@ -1265,6 +1289,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `Ctrl+D` | Save attachments to folder |
 | `Ctrl+G` | AI grammar & spell check (compose). The preview fits the screen and scrolls with `↑`/`↓`, `PgUp`/`PgDn`, and `Home`/`End`; `y` accepts, `n` or `Esc` cancels |
 | `F7` | Offline spell check (compose); needs Settings → Editor → Spell check |
+| `F4` | Preview the draft in your browser (compose) |
 | `Alt+M` in compose | Maximize the compose panel across the full terminal; press again to restore. The application status bar is hidden; compose notifications (including autosave failures) appear in the composer footer. Each new compose, reply, forward, or reopened draft starts compact. |
 | `F6` in compose | Template picker; `Enter` inserts, `e` edits, `n` saves the message as a new template |
 | `D` | Decrypt and verify the open PGP message (needs a PGP plugin) |

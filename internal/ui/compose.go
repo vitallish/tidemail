@@ -716,6 +716,13 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 	case ripple.CancelMsg:
 		return c, nil, true
 	}
+	if done, ok := msg.(draftPreviewMsg); ok {
+		c.statusMsg, c.isErr = "Preview opened in browser", false
+		if done.err != nil {
+			c.statusMsg, c.isErr = fmt.Sprintf("preview: %v", done.err), true
+		}
+		return c, nil, false
+	}
 	km, ok := msg.(tea.KeyMsg)
 	if !ok {
 		var cmd tea.Cmd
@@ -781,6 +788,11 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 
 	case km.String() == "ctrl+s" || km.String() == "ctrl+d":
 		return c.send()
+
+	case keyMatches(km, keys.PreviewDraft):
+		var cmd tea.Cmd
+		c, cmd = c.previewDraft()
+		return c, cmd, false
 
 	case keyMatches(km, keys.SpellCheck):
 		c.openSpell()

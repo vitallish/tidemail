@@ -165,6 +165,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{keys.CycleSender.Help().Key, "cycle sender account; From opens the full picker"},
 				{keys.PasteText.Help().Key, "paste clipboard into focused field"},
 				{keys.GrammarCheck.Help().Key, "AI grammar & spell check (preview scrolls with arrows/pgup/pgdn; y accepts, n cancels)"},
+				{keys.PreviewDraft.Help().Key, "preview the message as it will be sent (the HTML part) in your browser; nothing is saved or sent"},
 				{keys.Templates.Help().Key, "templates: insert a canned reply at the cursor (see the Templates section)"},
 				{keys.SpellCheck.Help().Key, "offline spell check: step through misspelled words (Settings → Editor → Spell check; pick English or Español under Spell check language)"},
 				{keys.PGPSign.Help().Key, "sign this message with PGP (needs a PGP plugin; nothing is sent if signing fails)"},
