@@ -83,31 +83,10 @@ the chosen paths to a file, attach what it wrote.
 - The contact manager has its own `filePicker` use (import). Out of scope here;
   the same setting could be applied later.
 
-## Addendum 2026-11-11: piecemeal key override for the attach key
+## Addendum 2026-11-11: key rebinding split out
 
-Why: the owner cannot use Alt-chords, so `Alt+F` is unusable for them. Keys are
-hard-coded (`DefaultKeys`, `internal/ui/keys.go`); no config reads them. A first
-attempt rebound `AttachFile` to `Ctrl+O` in code; that broke the command
-palette (it sends a synthetic `Alt+F`) and needed a literal `^o` footer hint,
-so the change was spread over four places and would live in a `mine:` commit.
-
-Decision (owner agreed): add a `[keys]` table in `config.toml`, a name ->
-list-of-keys map, accepting only names in a small registry. The registry starts
-with `AttachFile` and grows one key at a time. The default stays `Alt+F`, so
-upstream behaviour is unchanged and the owner's `AttachFile = ["ctrl+o"]` is
-configuration, not a code fork.
-
-Rejected: overriding all ~100 bindings at once (hints, help and palette
-literals would all need to follow the bindings; the editor library's own
-`alt+c/alt+r/alt+enter` need separate handling); a `mine:` code commit per key
-(permanent merge-conflict surface with upstream).
-
-Behaviour:
-- Unknown or misspelled names, and empty lists, are reported in the status
-  line at startup and on settings save; they are never silently ignored.
-- The compose footer hint and the command-palette action follow the binding:
-  the hint reads it (`ctrl+o` is shown as `^o`, like the other hints), the
-  palette calls the attach action directly instead of faking a keypress.
-- No conflict detection for now (one key); documented.
-- Applied after `DefaultKeys` is assigned and again after a settings save.
-
+The owner cannot use Alt-chords, so `Alt+F` is unusable for them. Rebinding the
+attach key is a separate topic (it adds a `[keys]` config table, touches the
+footer hint and the command palette) and lives on `feat/key-overrides`, stacked
+on this branch: see `docs/plans/key-overrides.md` there. This branch keeps the
+`Alt+F` default and does not change any binding.

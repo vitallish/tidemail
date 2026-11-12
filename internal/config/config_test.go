@@ -521,3 +521,19 @@ func TestComposeSearchRegexDefaultAndPersistence(t *testing.T) {
 		}
 	}
 }
+
+func TestFilePickerCmdSurvivesSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	cfg.Display.FilePickerCmd = "yazi --chooser-file={chooser}"
+	if err := Save(cfg); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got.Display.FilePickerCmd != cfg.Display.FilePickerCmd {
+		t.Fatalf("FilePickerCmd = %q", got.Display.FilePickerCmd)
+	}
+}
