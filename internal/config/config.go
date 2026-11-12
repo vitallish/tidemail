@@ -235,6 +235,11 @@ type DisplayConfig struct {
 	// "important", "category", or "category.<name>". Unset keys follow the
 	// theme; invalid values are ignored.
 	TagColors map[string]TagColor `toml:"tag_colors,omitempty"`
+	// FilePickerCmd, when set, replaces the built-in attachment browser in
+	// compose. It is a shell command line; {chooser} becomes the temp file the
+	// command writes the chosen paths to, one per line
+	// (e.g. "yazi --chooser-file={chooser}").
+	FilePickerCmd string `toml:"file_picker_cmd"`
 }
 
 // TagColor is a user override for one annotation tag. Either field may be

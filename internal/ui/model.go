@@ -464,6 +464,7 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 	// (read in newEditorArea), the same way the clipboard is injected.
 	setEditorVimMode(cfg.Display.ComposeVim)
 	setEditorSearchRegex(cfg.Display.ComposeSearchRegex)
+	setComposeFilePickerCmd(cfg.Display.FilePickerCmd)
 	setEditorWordWrap(cfg.Display.ComposeWordWrap)
 	setEditorSpell(cfg.Display.ComposeSpell, cfg.Display.ComposeSpellLang, loadSpellWords(database))
 	addSpellNames(accountSpellEntries(cfg))
@@ -3571,6 +3572,7 @@ func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Apply the vim toggle to future compose editors (read in newEditorArea).
 			setEditorVimMode(m.cfg.Display.ComposeVim)
 			setEditorSearchRegex(m.cfg.Display.ComposeSearchRegex)
+			setComposeFilePickerCmd(m.cfg.Display.FilePickerCmd)
 			setEditorWordWrap(m.cfg.Display.ComposeWordWrap)
 			setEditorSpell(m.cfg.Display.ComposeSpell, m.cfg.Display.ComposeSpellLang, loadSpellWords(m.db))
 			merged, _ := MergedThemeFromConfig(m.cfg)
