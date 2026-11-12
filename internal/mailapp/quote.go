@@ -86,6 +86,23 @@ func quoteText(q Quote) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// ExpandedMarkdown is the quote as ordinary editable Markdown: the attribution,
+// then the original with every line prefixed "> " (tables as pipe tables). It is
+// what "expand the quote" produces in the composer and what the command line puts
+// in a reply with --quote text.
+func (q Quote) ExpandedMarkdown() string {
+	md, err := quotehtml.Markdown(q.HTML)
+	if err != nil || strings.TrimSpace(md) == "" {
+		md = q.Text
+	}
+	var b strings.Builder
+	b.WriteString(q.Attribution + "\n\n")
+	for _, line := range strings.Split(strings.TrimRight(md, "\n"), "\n") {
+		b.WriteString(strings.TrimRight("> "+line, " ") + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 // ComposeOption adjusts PrepareCompose and ComposeHTML.
 type ComposeOption func(*composeOptions)
 
