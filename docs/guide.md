@@ -775,6 +775,61 @@ message, while `:q` cancels it.
 Replies and forwards quote the readable text of an HTML message, not its markup,
 and a forward keeps the original's attachments.
 
+### Tables in messages
+
+The message body is Markdown. TideMail sends it as two parts: the text you typed
+as the plain-text part, and the rendered result as the HTML part. A pipe table
+becomes a real HTML table in the HTML part:
+
+```
+| Arm     |  N | Mean |
+|:--------|---:|-----:|
+| Control | 48 | 12.1 |
+| Active  | 51 |  9.8 |
+```
+
+The second line sets the alignment of each column: `:---` left, `---:` right,
+`:---:` centered. The first row is the header and is sent bold. Cells can hold
+inline Markdown (`**bold**`, `` `code` ``, links). Recipients who read the plain-text
+part see the pipe rows exactly as typed, so keep columns lined up.
+
+Out of the box the table is sent bare. Some mail clients, Gmail on the web among
+them, then show it with no borders and almost no space between columns. Turn on
+inline styling to fix that, under **Settings → Editor → Table style** or in
+`config.toml`:
+
+```toml
+[display]
+compose_table_style = "basic"   # "none" (default), "basic" or "custom"
+```
+
+| Style | What is sent |
+|---|---|
+| `none` | A plain `<table>`, as before. The default. |
+| `basic` | `border-collapse:collapse` on the table and `border:1px solid #999;padding:4px 8px` on every cell. Alignment is kept. |
+| `custom` | The same, but the cell style is your own CSS from `compose_table_css`. |
+
+`custom` is set in the config file only; the Settings screen picks the style but
+leaves the CSS alone. Give `compose_table_css` CSS declarations, not a selector:
+
+```toml
+[display]
+compose_table_style = "custom"
+compose_table_css = "border:1px solid #444;padding:6px 10px"
+```
+
+If `custom` has no CSS, it behaves as `basic`. An unrecognised style is sent
+unstyled and TideMail prints a warning at startup. The styling is written on each
+element rather than in a `<style>` block because mail clients drop or ignore
+style blocks. It applies to mail you send only. It changes neither the text
+part, nor how tables look while you compose, nor how incoming mail is shown.
+
+Checked: Gmail on the web (2026-11-12). Without styling it shows a bare table with
+no borders; with `basic` it shows borders, cell padding, the bold header and the
+column alignment. Not checked yet: Outlook, Gmail mobile and dark-mode clients.
+The `#999` border was chosen to read on light and dark backgrounds, not tested
+on either.
+
 ### Templates
 
 Press `F6` in compose (the footer shows `f6 templates` in every field) to open

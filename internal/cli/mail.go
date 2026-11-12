@@ -208,6 +208,7 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	if err != nil {
 		return fail(1, "config_error", "cannot load config; check tidemail configuration")
 	}
+	smtp.SetTableStyle(cfg.Display.ComposeTableStyle, cfg.Display.ComposeTableCSS)
 	a, err := mailapp.ResolveAccount(cfg, account)
 	if err != nil {
 		return fail(2, "account_error", err.Error())
@@ -382,6 +383,7 @@ func runOutboxAction(args []string, out, errOut io.Writer) int {
 	if e != nil {
 		return fail(1, "config_error", "cannot load configuration")
 	}
+	smtp.SetTableStyle(cfg.Display.ComposeTableStyle, cfg.Display.ComposeTableCSS)
 	if *agent && !mailapp.Allowed(cfg, "mail.send") {
 		return fail(3, "permission_denied", "agent capability denied: mail.send")
 	}

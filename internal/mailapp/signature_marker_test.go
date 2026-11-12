@@ -267,3 +267,52 @@ func TestComposePathsShareMarkdownExtensions(t *testing.T) {
 		})
 	}
 }
+
+func TestComposePathsApplyTableStyleAlike(t *testing.T) {
+	smtp.SetTableStyle("basic", "")
+	t.Cleanup(func() { smtp.SetTableStyle("", "") })
+	a := config.AccountConfig{User: "sender@example.com", Signature: "Alice"}
+	table := "| Arm | N |\n|:---|---:|\n| A | 12 |\n"
+	for _, tc := range []struct{ name, body string }{
+		{"no marker", table},
+		{"marker", table + "\n⁂\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := PrepareCompose(a, db.Draft{To: "reader@example.com", BodyText: tc.body})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{`<table style="border-collapse:collapse">`, `<td style="border:1px solid #999;padding:4px 8px;text-align:right">12</td>`} {
+				if !strings.Contains(msg.HTMLBody, want) {
+					t.Fatalf("HTML lacks %q:\n%s", want, msg.HTMLBody)
+				}
+			}
+		})
+	}
+}
+
+// A realistic message: every <th>/<td> must carry the style (none missed, e.g.
+// cells with inline Markdown or no alignment), nothing else is touched, and no
+// <style> block is emitted because mail clients drop them.
+func TestComposeStyledTableInRealisticMessage(t *testing.T) {
+	smtp.SetTableStyle("basic", "")
+	t.Cleanup(func() { smtp.SetTableStyle("", "") })
+	body := "Hi,\n\n| Arm | N | Mean |\n|:--|--:|:-:|\n| Control | 48 | 12.1 |\n| **Active** | 51 | `9.8` |\n| a much longer cell that wraps in narrow clients | 1 | 2 |\n\n- one\n- two\n\n> quoted\n\n```\ncode\n```\n\n⁂\n"
+	msg, err := PrepareCompose(config.AccountConfig{User: "sender@example.com", Signature: "Alice"}, db.Draft{To: "reader@example.com", BodyText: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := msg.HTMLBody
+	cells := strings.Count(h, "<th ") + strings.Count(h, "<td ")
+	if cells != 12 || strings.Count(h, "border:1px solid #999;padding:4px 8px") != cells {
+		t.Fatalf("%d cells, %d styled:\n%s", cells, strings.Count(h, "border:1px solid #999;padding:4px 8px"), h)
+	}
+	for _, want := range []string{"<strong>Active</strong>", "<code>9.8</code>", "<ul>\n<li>one</li>", "<blockquote>", "<pre><code>code", "-- <br>\nAlice"} {
+		if !strings.Contains(h, want) {
+			t.Fatalf("missing %q:\n%s", want, h)
+		}
+	}
+	if strings.Contains(h, "<style") {
+		t.Fatalf("styling must be inline, found a <style> block:\n%s", h)
+	}
+}

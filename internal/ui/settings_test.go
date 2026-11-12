@@ -1868,3 +1868,35 @@ func TestSettingsCLISwitchesToggleAndApply(t *testing.T) {
 		t.Fatalf("toggles not applied: %+v", got)
 	}
 }
+
+func TestSettingsTableStyleCyclesAndKeepsCustomCSS(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Display.ComposeTableCSS = "border:2px solid #222"
+	s := newSettings(cfg, settingsUpdateState{})
+	if got := s.ApplyTo(cfg).Display.ComposeTableStyle; got != config.TableStyleNone {
+		t.Fatalf("default must stay none, got %q", got)
+	}
+	s.setActiveSection(ssEditor)
+	s.setFocusedPane(settingsPaneDetail)
+	s.setFocusedField(sfComposeTableStyle)
+	next := s
+	for i, want := range []string{config.TableStyleBasic, config.TableStyleCustom, config.TableStyleNone} {
+		next, _, _ = next.Update(tea.KeyMsg{Type: tea.KeyRight}, DefaultKeys)
+		out := next.ApplyTo(cfg)
+		if out.Display.ComposeTableStyle != want {
+			t.Fatalf("step %d: style = %q, want %q", i, out.Display.ComposeTableStyle, want)
+		}
+		if out.Display.ComposeTableCSS != "border:2px solid #222" {
+			t.Fatalf("settings must not touch compose_table_css, got %q", out.Display.ComposeTableCSS)
+		}
+	}
+}
+
+func TestSettingsTableStyleReadsCustomFromConfig(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Display.ComposeTableStyle = " Custom "
+	s := newSettings(cfg, settingsUpdateState{})
+	if got := s.ApplyTo(cfg).Display.ComposeTableStyle; got != config.TableStyleCustom {
+		t.Fatalf("got %q", got)
+	}
+}

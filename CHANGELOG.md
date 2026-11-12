@@ -12,6 +12,12 @@ All notable changes to TideMail are documented in this file.
   compose, e.g. `yazi --chooser-file={chooser}`. TideMail suspends while it
   runs and attaches every path the picker writes to the `{chooser}` file. Unix
   only; the built-in browser stays the default.
+- Markdown pipe tables in a message are sent as real HTML tables (they used to go
+  out as literal `| a | b |` text), with column alignment. New
+  `compose_table_style` in `[display]` (also **Settings → Editor → Table style**)
+  adds borders and cell padding to them as inline styles that Gmail honours:
+  `none` (default, unchanged), `basic`, or `custom` with your own CSS in
+  `compose_table_css` (config file only). See "Tables in messages" in the guide.
 
 ### Fixed
 
