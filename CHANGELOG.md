@@ -43,6 +43,11 @@ All notable changes to TideMail are documented in this file.
   box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
   filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
   **Clear search history** is in the command palette.
+- Search operators: `subject:`, `from:`, `to:`, `cc:`, `body:`, `after:`/`before:`/`on:`
+  (a date or `7d`, `2w`, `3m`, `1y`), `has:attachment`, `is:unread`/`is:read`/
+  `is:starred`, `OR`, `-` to exclude, and quoted phrases that keep word order.
+  Plain words behave as before. The `tidemail messages search` command takes
+  the same operators.
 
 ### Fixed
 
