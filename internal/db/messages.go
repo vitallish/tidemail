@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/allisonhere/tidemail/internal/mailtag"
+	"github.com/allisonhere/tidemail/internal/searchquery"
 )
 
 type Message struct {
@@ -169,9 +170,8 @@ func (db *DB) SearchAllMessagesPage(query string, unreadOnly bool, limit, offset
 }
 
 func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limit, offset int) ([]Message, int, error) {
-	terms := ParseSearch(query)
-	match := ftsQuery(terms.Text)
-	if match == "" && len(terms.Tags) == 0 {
+	compiled := compileSearch(searchquery.Parse(query, time.Now()))
+	if compiled.empty() {
 		return nil, 0, nil
 	}
 	const columns = `messages.id, messages.mailbox_id, messages.uid, messages.message_id,
@@ -182,20 +182,14 @@ func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limi
 	const joins = `
 		JOIN mailboxes ON mailboxes.id = messages.mailbox_id
 		JOIN accounts ON accounts.id = mailboxes.account_id`
-	var where []string
-	var args []any
+	where, args := compiled.where, compiled.args
 	from := "messages"
 	orderBy := "messages.date DESC, messages.id DESC"
-	if match != "" {
+	if compiled.match != "" {
 		from = "messages_fts JOIN messages ON messages.id = messages_fts.rowid"
-		where = append(where, "messages_fts MATCH ?")
-		args = append(args, match)
+		where = append([]string{"messages_fts MATCH ?"}, where...)
+		args = append([]any{compiled.match}, args...)
 		orderBy = "bm25(messages_fts), " + orderBy
-	}
-	if len(terms.Tags) > 0 {
-		expr, tagArgs := tagsWhere(terms.Tags)
-		where = append(where, expr)
-		args = append(args, tagArgs...)
 	}
 	if unreadOnly {
 		where = append(where, "messages.read = 0")
@@ -524,35 +518,6 @@ func scanMessagesWithContext(rows interface {
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
-}
-
-// ftsQuery turns what the user typed into an FTS5 MATCH expression. Terms are
-// quoted (so punctuation in an address can't be read as FTS operators) and
-// ANDed together.
-//
-// The final term also gets the prefix operator, because search runs on every
-// keystroke: without it a half-typed word matches no token at all, so results
-// vanish mid-word and only reappear once the word is finished. Only the last
-// term is treated this way — earlier terms are complete words the user has
-// already moved past.
-func ftsQuery(query string) string {
-	parts := strings.Fields(strings.TrimSpace(query))
-	if len(parts) == 0 {
-		return ""
-	}
-	quoted := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.ReplaceAll(part, `"`, `""`)
-		if part == "" {
-			continue
-		}
-		quoted = append(quoted, `"`+part+`"`)
-	}
-	if len(quoted) == 0 {
-		return ""
-	}
-	quoted[len(quoted)-1] += "*"
-	return strings.Join(quoted, " AND ")
 }
 
 func (db *DB) upsertMessageFTS(id int64) error {

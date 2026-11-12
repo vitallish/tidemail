@@ -188,6 +188,24 @@ Press `/` to search, `u` to show unread mail, and `t` to place starred messages
 first. Search covers subject, sender, recipients, and message body across every
 account and folder, and matches as you type.
 
+Operators narrow a search. Words are ANDed, so `invoice due` needs both:
+
+| Type | Finds |
+|---|---|
+| `subject:invoice`, `from:ann`, `to:bob`, `cc:carol`, `body:refund` | the word in that field only (`from:ann@example.com`, or quote a name: `from:"Ann Lee"`) |
+| `"quarterly review"` | the exact phrase, in that word order |
+| `after:2026-01-31`, `before:2026-02-15`, `on:2026-02-01` | received on or after / before / on that day (your local time) |
+| `after:7d`, `after:2w`, `after:3m`, `after:1y` | received within that long ago |
+| `has:attachment` | messages with an attachment |
+| `is:unread`, `is:read`, `is:starred` | by state |
+| `a OR b` | either (`from:ann OR from:bob invoice` means (ann or bob) and invoice) |
+| `-term` | not that term (`invoice -from:ann`, `-has:attachment`, `-#github`) |
+
+`OR` must be in capitals and joins the terms on either side of it; there are no
+parentheses. A value that cannot be read, such as `after:2026-0` while you are
+still typing it, is ignored until it is complete. The `tidemail messages search`
+command takes the same operators.
+
 Type `#` and a tag name to search by the tags shown on message rows:
 `#github`, `#billing`, or any other category, and `#reply`, `#urgent`, or
 `#important`. Tags match as you type (`#git` already finds `#github`), several

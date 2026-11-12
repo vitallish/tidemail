@@ -1,57 +1,12 @@
 package db
 
-import (
-	"regexp"
-	"strings"
-)
+import "strings"
 
 // Tag search: "#tag" terms in a search match the tags TideMail shows on
 // message rows, using the effective classification (plugin annotations with
 // the user's corrections applied), so a search agrees with the tags on
 // screen. Terms match by prefix, so "#git" already finds #github while
 // typing; several tags must all match.
-
-// SearchTerms is a search split into full-text words and #tags.
-type SearchTerms struct {
-	Text string
-	Tags []string
-}
-
-// ParseSearch splits a search into free text and lowercase #tag names. A
-// lone "#" or a tag with no usable characters is ignored.
-func ParseSearch(query string) SearchTerms {
-	var words []string
-	var terms SearchTerms
-	for _, f := range searchTokenPattern.FindAllString(query, -1) {
-		if !strings.HasPrefix(f, "#") {
-			words = append(words, f)
-			continue
-		}
-		raw := strings.TrimLeft(f, "#")
-		if strings.HasPrefix(raw, "\"") {
-			tag := strings.TrimSuffix(strings.TrimPrefix(raw, "\""), "\"")
-			tag = strings.ToLower(strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(tag))
-			if tag != "" {
-				terms.Tags = append(terms.Tags, tag)
-			}
-			continue
-		}
-		tag := strings.Map(func(r rune) rune {
-			switch {
-			case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-', r == '.', r == '$', r == '+':
-				return r
-			}
-			return -1
-		}, strings.ToLower(strings.TrimLeft(f, "#")))
-		if tag != "" {
-			terms.Tags = append(terms.Tags, tag)
-		}
-	}
-	terms.Text = strings.Join(words, " ")
-	return terms
-}
-
-var searchTokenPattern = regexp.MustCompile(`#+"(?:[^"\\\n]|\\.)*(?:"|$)|\S+`)
 
 // Attention tags as they appear on rows, with accepted spellings.
 var attentionTagNames = []struct {
@@ -117,16 +72,4 @@ func userAwareSignal(key string, values, user []string) (string, []any) {
 		OR (NOT EXISTS (SELECT 1 FROM classification_overrides co
 			WHERE co.message_id = messages.id AND co.key = ? AND co.value != 'plugin')
 			AND ` + pluginExpr + `))`, args
-}
-
-// tagsWhere ANDs the predicates for every tag.
-func tagsWhere(tags []string) (string, []any) {
-	var parts []string
-	var args []any
-	for _, t := range tags {
-		expr, exprArgs := tagPredicate(t)
-		parts = append(parts, expr)
-		args = append(args, exprArgs...)
-	}
-	return strings.Join(parts, " AND "), args
 }

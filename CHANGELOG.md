@@ -6,6 +6,14 @@ All notable changes to TideMail are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Search operators: `subject:`, `from:`, `to:`, `cc:`, `body:`, `after:`/`before:`/`on:`
+  (a date or `7d`, `2w`, `3m`, `1y`), `has:attachment`, `is:unread`/`is:read`/
+  `is:starred`, `OR`, `-` to exclude, and quoted phrases that keep word order.
+  Plain words behave as before. The `tidemail messages search` command takes
+  the same operators.
+
 ### Fixed
 
 - TideMail would not start on Windows since v1.8.0: it exited with `error
