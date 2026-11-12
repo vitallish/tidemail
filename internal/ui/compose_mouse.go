@@ -27,7 +27,7 @@ type composeMouseState struct {
 // not on screen (attachment picker, template browser).
 func (m Model) composeBodyRect() (x, y, w, h int, ok bool) {
 	c := m.compose
-	if c.picker.active || c.tmplOpen {
+	if c.picker.active || c.tmplOpen || c.quoteOpen {
 		return 0, 0, 0, 0, false
 	}
 	winW, winH := c.overlayDimensions(m.width, m.height)

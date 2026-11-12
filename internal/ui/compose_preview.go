@@ -86,7 +86,7 @@ func openPreviewCmd(target, note string) tea.Cmd {
 // if the server cannot start it falls back to the static file and says so.
 func (c ComposeModel) previewDraft() (ComposeModel, tea.Cmd) {
 	body, subject := c.bodyInput.Value(), c.subjectInput.Value()
-	html, problems, err := mailapp.ComposeHTML(c.selectedAccount(), body, c.draftAttachments())
+	html, problems, err := mailapp.ComposeHTML(c.selectedAccount(), body, c.draftAttachments(), quoteOption(c.inReplyTo))
 	if err != nil {
 		c.statusMsg = err.Error()
 		c.isErr = true
@@ -159,7 +159,7 @@ func (c ComposeModel) refreshLivePreview() ComposeModel {
 		return c
 	}
 	c.preview.subject, c.preview.body, c.preview.atts = subject, body, len(c.attachments) // do not retry until it changes again
-	html, problems, err := mailapp.ComposeHTML(c.selectedAccount(), body, c.draftAttachments())
+	html, problems, err := mailapp.ComposeHTML(c.selectedAccount(), body, c.draftAttachments(), quoteOption(c.inReplyTo))
 	if err != nil {
 		return c
 	}

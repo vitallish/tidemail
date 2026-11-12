@@ -60,6 +60,20 @@ Issue: vitallish/tidemail #4 (keep HTML structure when quoting). Written
    images and 1x1 pixels, drop inline (`cid:`) images keeping their alt text;
    re-embedding inline images is a follow-up.
 
+## Amendments made while building (2026-11-12)
+- **Setting is a toggle, not a picker:** `[display] compose_reply_marker = true|false`
+  (Settings > Editor > "Reply quote marker"), not `compose_reply_quote = "text" |
+  "placeholder"` as decided above. Same meaning and same default (off); a toggle
+  reuses the existing widget and the setting has only two states. Decision 2 is
+  otherwise unchanged.
+- **Undo:** the editor's own Ctrl+Z cannot see a whole-body replacement, so the
+  "Ctrl+Z still reverts" claim in point 4 was false. Instead, Ctrl+Z immediately
+  after expanding restores the marker, and only while the body is exactly what
+  expanding produced (tested); after any other edit it no longer can.
+- **Stacking:** the branch sits on `feat/inline-images` (not `main`): `composeBody`
+  and the image resolver it changes live there.
+- **Images:** as confirmed by the owner (decision 4).
+
 ## Tests
 Resolution to HTML + text for tables, lists, nested quotes, hostile HTML
 (script, style, event handlers, remote images); marker forgery in quoted mail;
