@@ -164,7 +164,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{keys.MaximizeCompose.Help().Key, "maximize/restore compose (session only)"},
 				{keys.RemoveAttach.Help().Key, "remove last attachment"},
 				{keys.CycleSender.Help().Key, "cycle sender account; From opens the full picker"},
-				{keys.PasteText.Help().Key, "paste clipboard into focused field"},
+				{keys.PasteText.Help().Key, "paste clipboard into focused field; an image alone on the clipboard is attached and referenced in the body (Linux: wl-paste or xclip)"},
 				{keys.GrammarCheck.Help().Key, "AI grammar & spell check (preview scrolls with arrows/pgup/pgdn; y accepts, n cancels)"},
 				{keys.PreviewDraft.Help().Key, "preview the message as it will be sent (the HTML part) in your browser; nothing is saved or sent. Press again to refresh, or turn on Settings → Editor → Live preview server to update as you type"},
 				{keys.Templates.Help().Key, "templates: insert a canned reply at the cursor (see the Templates section)"},

@@ -53,7 +53,7 @@ Summary,`,`,AI summary,main
 VisualSelect,v,v,visual select,content
 VisualLine,V,V,select message,content
 CopyText,C,C,copy text,summary
-PasteText,ctrl+v,ctrl+v,paste text,compose
+PasteText,ctrl+v,ctrl+v,paste text (or an image that is alone on the clipboard),compose
 SaveMD,M,M,save as .md,summary
 DiscardDraft,d,d,discard draft,compose
 ContentSearch,ctrl+f,ctrl+f,find in content,content

@@ -129,6 +129,7 @@ func (m Model) composeCommandItems() []commandItem {
 		{id: "compose-template", label: "Insert template…", enabled: true},
 		{id: "compose-preview", label: "Preview draft in browser", enabled: true},
 		{id: "compose-attach", label: "Attach file", enabled: true},
+		{id: "compose-paste-image", label: "Paste image from clipboard", enabled: true},
 		{id: "compose-remove-attach", label: "Remove last attachment", enabled: canRemove},
 		{id: "compose-cycle-sender", label: "Change sender", enabled: canCycleSender},
 		{id: "compose-close", label: "Close compose", enabled: true},
@@ -326,6 +327,8 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.compose, cmd = m.compose.previewDraft()
 		return m, cmd
+	case "compose-paste-image":
+		return m, clipboardImageCmd()
 	case "compose-attach":
 		return m.handleCompose(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f"), Alt: true})
 	case "compose-remove-attach":

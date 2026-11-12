@@ -1936,6 +1936,20 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case ClipboardImageMsg:
+		if m.overlay != overlayCompose {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.setComposeStatus("paste image: "+msg.Err.Error(), true)
+			return m, m.clearStatusCmd()
+		}
+		var status string
+		m.compose, status = m.compose.pasteImage(msg.Image)
+		m.compose.dirty = true
+		m.setComposeStatus(status, false)
+		return m, nil
+
 	case AttachmentsSavedMsg:
 		if msg.Err != nil {
 			m.setStatus(fmt.Sprintf("save attachments failed: %v", msg.Err), true)
@@ -3734,7 +3748,7 @@ func (m Model) handleCompose(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if km, ok := msg.(tea.KeyMsg); ok && !searching && keyMatches(km, m.keys.PasteText) && !m.compose.picker.active {
-		return m, clipboardReadCmd()
+		return m, clipboardPasteCmd()
 	}
 	// Sanitize system paste to prevent textarea corruption from combining marks.
 	if km, ok := msg.(tea.KeyMsg); ok && km.Paste && !searching {
