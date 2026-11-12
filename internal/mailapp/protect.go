@@ -61,7 +61,7 @@ func Protect(ctx context.Context, prepare Preparer, msg smtp.OutgoingMessage, si
 	}
 
 	out := msg
-	out.Body, out.HTMLBody, out.Attachments = "", "", nil
+	out.Body, out.HTMLBody, out.Attachments, out.InlineImages = "", "", nil, nil
 	if encrypt {
 		out.Protected = &smtp.Protection{Encrypted: res.Encrypted}
 	} else {

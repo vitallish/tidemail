@@ -7,6 +7,7 @@ import (
 
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/inlineimg"
 	"github.com/allisonhere/tidemail/internal/smtp"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -23,34 +24,44 @@ const SignatureMarker = "⁂"
 // protection. A body without a marker is intentionally unsigned, including old
 // drafts. The draft itself is never modified, so undo/edit restores the marker.
 func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.OutgoingMessage, error) {
-	body, html, err := composeBody(draft.BodyText, account.Signature)
+	images := inlineimg.NewResolver(inlineimg.ModeSend, imageSources(draft.Attachments))
+	body, html, err := composeBody(draft.BodyText, account.Signature, images)
 	if err != nil {
+		return smtp.OutgoingMessage{}, err
+	}
+	if err := imageError(images); err != nil {
 		return smtp.OutgoingMessage{}, err
 	}
 	// Reuse all ordinary identity, recipient, and attachment validation without
 	// rendering the original Markdown twice or appending another signature.
 	draft.BodyText = ""
+	draft.Attachments = withoutInline(draft.Attachments, images)
 	msg, err := Prepare(account, draft, false)
 	if err != nil {
 		return msg, err
 	}
-	msg.Body, msg.HTMLBody = body, html
+	msg.Body, msg.HTMLBody, msg.InlineImages = body, html, inlineParts(images)
 	return msg, nil
 }
 
 // ComposeHTML returns the HTML part that sending would produce for a draft body
 // and the account's signature, without validating recipients or sender. Sending
 // and the browser preview both come through composeBody, so they cannot differ.
-func ComposeHTML(account config.AccountConfig, body string) (string, error) {
-	_, html, err := composeBody(body, account.Signature)
-	return html, err
+// Images are shown as data: URIs of the very bytes that would be sent (resized
+// and re-encoded). Problems with images are returned alongside the HTML, which
+// then shows them as broken; sending refuses them instead. err is for a body
+// that cannot be converted at all, such as two signature markers.
+func ComposeHTML(account config.AccountConfig, body string, attachments []db.DraftAttachment) (html string, problems []string, err error) {
+	images := inlineimg.NewResolver(inlineimg.ModePreview, imageSources(attachments))
+	_, html, err = composeBody(body, account.Signature, images)
+	return html, images.Problems(), err
 }
 
-func composeBody(body, signature string) (string, string, error) {
+func composeBody(body, signature string, images *inlineimg.Resolver) (string, string, error) {
 	var html string
 	switch strings.Count(body, SignatureMarker) {
 	case 0:
-		html = smtp.MarkdownToHTML(body)
+		html = smtp.MarkdownToHTMLOpts(body, imageOption(images))
 	case 1:
 		body = strings.ReplaceAll(body, "\r\n", "\n")
 		pos := strings.Index(body, SignatureMarker)
@@ -65,7 +76,7 @@ func composeBody(body, signature string) (string, string, error) {
 		source := []byte(body)
 		// Same converter as MarkdownToHTML plus the signature renderer: every new
 		// message carries the marker, so it must not get a different dialect.
-		md := smtp.NewMarkdown(goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(signatureRenderer{}, 100))))
+		md := smtp.NewMarkdown(goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(signatureRenderer{}, 100))), imageOption(images))
 		doc := md.Parser().Parse(text.NewReader(source))
 		var marker ast.Node
 		for node := doc.FirstChild(); node != nil; node = node.NextSibling() {
@@ -104,7 +115,9 @@ func composeBody(body, signature string) (string, string, error) {
 	if strings.Contains(body, SignatureMarker) || strings.Contains(html, SignatureMarker) {
 		return "", "", fmt.Errorf("remove the reserved ⁂ symbol from message text or the configured signature")
 	}
-	return body, html, nil
+	// The plain-text part must not carry the image references: they would show a
+	// recipient a file name, or a wall of base64.
+	return inlineimg.PlainText(body), html, nil
 }
 
 var signatureBlockKind = ast.NewNodeKind("ComposeSignature")

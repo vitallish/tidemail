@@ -88,10 +88,11 @@ because phone and laptop screens are mostly high-DPI; the cost is about 4x the p
 
 ## Dependencies
 
-`fix/gfm-tables` introduced `smtp.NewMarkdown` (one converter for both compose paths). This
-feature needs that single converter, so it is stacked on `fix/gfm-tables`: `feat/inline-images`
-is rebased onto it before implementation. Merge order in `mine`: after `fix/gfm-tables`,
-before `feat/key-overrides`.
+`fix/gfm-tables` introduced `smtp.NewMarkdown` (one converter for both compose paths), and the
+preview parity this feature is about lives in `feat/compose-preview`. So `feat/inline-images`
+is stacked on both: rebased onto `fix/gfm-tables` and with `feat/compose-preview` merged in
+(2026-11-12; recorded with `git config branch.feat/inline-images.description`). Merge order in
+`mine`: after both, before `feat/key-overrides`. An upstream PR would need those two first.
 
 ## Checking against a real render
 

@@ -277,12 +277,12 @@ func TestComposeHTMLMatchesPrepareCompose(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := ComposeHTML(a, body)
-		if err != nil || got != sent.HTMLBody {
-			t.Fatalf("body %q: ComposeHTML = %q (%v), PrepareCompose = %q", body, got, err, sent.HTMLBody)
+		got, problems, err := ComposeHTML(a, body, nil)
+		if err != nil || len(problems) != 0 || got != sent.HTMLBody {
+			t.Fatalf("body %q: ComposeHTML = %q (%v %v), PrepareCompose = %q", body, got, problems, err, sent.HTMLBody)
 		}
 	}
-	if _, err := ComposeHTML(a, "a\n\n⁂\n\nb\n\n⁂\n"); err == nil {
+	if _, _, err := ComposeHTML(a, "a\n\n⁂\n\nb\n\n⁂\n", nil); err == nil {
 		t.Fatal("two markers must be an error, as when sending")
 	}
 }

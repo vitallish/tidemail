@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
@@ -44,6 +45,15 @@ type Attachment struct {
 	Data []byte
 }
 
+// InlineImage is an image the HTML part refers to as src="cid:...". It travels in
+// a multipart/related part next to the HTML, not as an attachment.
+type InlineImage struct {
+	ContentID   string // without angle brackets
+	Name        string
+	ContentType string
+	Data        []byte
+}
+
 type OutgoingMessage struct {
 	From        string
 	To          []string
@@ -55,6 +65,8 @@ type OutgoingMessage struct {
 	InReplyTo   string
 	References  string
 	Attachments []Attachment
+	// InlineImages are the images HTMLBody references by cid:.
+	InlineImages []InlineImage
 	// Date and MessageID are stamped once, before the message is transmitted,
 	// so that a copy appended to the Sent folder is byte-identical to what was
 	// delivered. Generating them inside buildRaw would differ per call.
@@ -415,7 +427,7 @@ func buildEntity(msg OutgoingMessage, mailSafe bool) []byte {
 		hdr.WriteString("\r\n")
 		buf.WriteString(hdr.String())
 		addTextPart(mw, msg.Body, mailSafe)
-		addHTMLPart(mw, msg.HTMLBody, mailSafe)
+		addHTMLWithImages(mw, msg, mailSafe)
 		mw.Close()
 		return buf.Bytes()
 	}
@@ -438,7 +450,7 @@ func buildEntity(msg OutgoingMessage, mailSafe bool) []byte {
 		altWriter = multipart.NewWriter(altPart)
 		_ = altWriter.SetBoundary(boundary)
 		addTextPart(altWriter, msg.Body, mailSafe)
-		addHTMLPart(altWriter, msg.HTMLBody, mailSafe)
+		addHTMLWithImages(altWriter, msg, mailSafe)
 		altWriter.Close()
 	} else {
 		addTextPart(mw, msg.Body, mailSafe)
@@ -452,18 +464,47 @@ func buildEntity(msg OutgoingMessage, mailSafe bool) []byte {
 			"Content-Transfer-Encoding": {"base64"},
 		}
 		w, _ := mw.CreatePart(attHdr)
-		encoded := base64.StdEncoding.EncodeToString(att.Data)
-		for i := 0; i < len(encoded); i += 76 {
-			end := i + 76
-			if end > len(encoded) {
-				end = len(encoded)
-			}
-			_, _ = w.Write([]byte(encoded[i:end] + "\r\n"))
-		}
+		writeBase64(w, att.Data)
 	}
 
 	mw.Close()
 	return buf.Bytes()
+}
+
+// writeBase64 writes data as base64 in 76-column lines.
+func writeBase64(w io.Writer, data []byte) {
+	encoded := base64.StdEncoding.EncodeToString(data)
+	for i := 0; i < len(encoded); i += 76 {
+		end := min(i+76, len(encoded))
+		_, _ = w.Write([]byte(encoded[i:end] + "\r\n"))
+	}
+}
+
+// addHTMLWithImages writes the HTML part. With inline images it is a
+// multipart/related holding the HTML first and then each image, referenced from
+// the HTML by Content-ID; without them it is the plain HTML part.
+func addHTMLWithImages(mw *multipart.Writer, msg OutgoingMessage, mailSafe bool) {
+	if len(msg.InlineImages) == 0 {
+		addHTMLPart(mw, msg.HTMLBody, mailSafe)
+		return
+	}
+	boundary := fmt.Sprintf("tm-%x", sha256.Sum256([]byte(msg.MessageID+"related")))
+	part, _ := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type": {fmt.Sprintf("multipart/related; type=\"text/html\"; boundary=\"%s\"", boundary)},
+	})
+	rw := multipart.NewWriter(part)
+	_ = rw.SetBoundary(boundary)
+	addHTMLPart(rw, msg.HTMLBody, mailSafe)
+	for _, img := range msg.InlineImages {
+		w, _ := rw.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {mime.FormatMediaType(img.ContentType, map[string]string{"name": img.Name})},
+			"Content-Disposition":       {mime.FormatMediaType("inline", map[string]string{"filename": img.Name})},
+			"Content-Id":                {"<" + img.ContentID + ">"},
+			"Content-Transfer-Encoding": {"base64"},
+		})
+		writeBase64(w, img.Data)
+	}
+	rw.Close()
 }
 
 func addTextPart(mw *multipart.Writer, body string, mailSafe bool) {
@@ -503,12 +544,14 @@ func NewMarkdown(opts ...goldmark.Option) goldmark.Markdown {
 	return goldmark.New(append([]goldmark.Option{goldmark.WithExtensions(extension.GFM)}, opts...)...)
 }
 
-var markdownConverter = NewMarkdown()
-
 // MarkdownToHTML converts Markdown text to HTML using goldmark.
-func MarkdownToHTML(md string) string {
+func MarkdownToHTML(md string) string { return MarkdownToHTMLOpts(md) }
+
+// MarkdownToHTMLOpts is MarkdownToHTML with extra goldmark options, for callers
+// that add behaviour such as inline image handling to the shared converter.
+func MarkdownToHTMLOpts(md string, opts ...goldmark.Option) string {
 	var buf bytes.Buffer
-	if err := markdownConverter.Convert([]byte(md), &buf); err != nil {
+	if err := NewMarkdown(opts...).Convert([]byte(md), &buf); err != nil {
 		return ""
 	}
 	return buf.String()

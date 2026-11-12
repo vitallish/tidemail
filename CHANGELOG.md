@@ -8,6 +8,14 @@ All notable changes to TideMail are documented in this file.
 
 ### Added
 
+- Inline images in composed mail. Attach an image, then write `![alt](name.png)` with its file
+  name: it is sent inside the message body (a `multipart/related` part with a `Content-ID`)
+  instead of as an attachment, shown at most 600 pixels wide and embedded at twice that for
+  sharp screens, never enlarged. `![alt](name.png){width=300}` or `{width=50%}` sets a size.
+  JPEGs are re-encoded with their rotation applied and all metadata, including GPS position,
+  removed. The plain-text part shows `[image: alt]` instead of the reference. File paths are
+  not supported; remote `https://` images are left as links, and `data:` images are converted.
+  The browser preview (`F4`) shows the same processed images and now also loads remote images.
 - `F4` in compose (or **Preview draft in browser** in the command palette) opens the
   HTML part of the draft in your browser exactly as it would be sent, before you
   send it. Nothing is saved or sent, and recipients are not required. The page is

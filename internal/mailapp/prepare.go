@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/inlineimg"
 	"github.com/allisonhere/tidemail/internal/smtp"
 	"net/mail"
 	"strings"
@@ -79,8 +80,13 @@ func Prepare(account config.AccountConfig, draft db.Draft, signature bool) (smtp
 		return msg, fmt.Errorf("configure a valid sender address for this account")
 	}
 	msg.Subject = draft.Subject
-	msg.Body = draft.BodyText
-	msg.HTMLBody = smtp.MarkdownToHTML(draft.BodyText)
+	images := inlineimg.NewResolver(inlineimg.ModeSend, imageSources(draft.Attachments))
+	msg.Body = inlineimg.PlainText(draft.BodyText)
+	msg.HTMLBody = smtp.MarkdownToHTMLOpts(draft.BodyText, imageOption(images))
+	if err := imageError(images); err != nil {
+		return msg, err
+	}
+	msg.InlineImages = inlineParts(images)
 	msg.InReplyTo = draft.InReplyTo
 	msg.References = draft.References
 	if sig := strings.TrimSpace(account.Signature); signature && sig != "" {
@@ -90,6 +96,9 @@ func Prepare(account config.AccountConfig, draft db.Draft, signature bool) (smtp
 	for _, a := range draft.Attachments {
 		if strings.ContainsAny(a.Filename, "\r\n") {
 			return msg, fmt.Errorf("attachment filename cannot contain newlines")
+		}
+		if images.Used(a.Filename) {
+			continue // sent inline, inside the HTML part
 		}
 		msg.Attachments = append(msg.Attachments, smtp.Attachment{Name: a.Filename, Data: a.Data})
 	}
