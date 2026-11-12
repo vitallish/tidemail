@@ -1,8 +1,8 @@
 # Reply quoting with a placeholder (plan)
 
 Issue: vitallish/tidemail #4 (keep HTML structure when quoting). Written
-2026-11-12 before implementation. Status: AWAITING the owner's answers to
-"Decisions"; nothing is built.
+2026-11-12 before implementation. Status: decisions answered by the owner
+2026-11-12 (below); implementation next.
 
 ## What exists today (read from the code, 2026-11-12)
 - A reply starts with the original as editable text: `quoteReply` (internal/ui/
@@ -43,27 +43,22 @@ Issue: vitallish/tidemail #4 (keep HTML structure when quoting). Written
    identically, so the whole path is testable without the TUI. Forward can adopt
    the same mechanism later; not in this change.
 
-## Decisions for the owner (recommendation first)
-1. **Where the original lives until sending.**
-   - A. *Snapshot in the draft* (new `quote` columns/table: HTML, text,
-     attribution) — recommended. + survives the original being deleted or
-     re-synced; the send is exactly what the preview showed; works for queued
-     and delayed sends. − schema change, drafts grow by the original's size.
-   - B. *Look it up by Message-ID at send time.* + no schema change. − fails if
-     the original left the cache; result can change between preview and send.
-2. **Default behaviour.**
-   - A. *Placeholder is the default for replies* — recommended for the fork.
-   - B. *Opt-in setting, today's `> ` text stays the default*: the safest for an
-     upstream PR (no behaviour change unless asked), at the cost of the benefit
-     being off until enabled. Either way a setting `compose_reply_quote =
-     "placeholder" | "text"` exists (Settings > Editor).
-3. **Marker glyph and how it shows.** Show it as a dim line reading e.g.
-   `⁅ quoted message ⁆` instead of a bare rune? A recognisable text token is
-   friendlier than a lone glyph but is longer to guard against; recommended:
-   a single reserved rune like `⁂`, rendered by the composer as a labelled dim
-   line (the editor still holds the rune).
-4. **Quote images:** drop remote and cid images (recommended, privacy and
-   robustness) or keep remote ones.
+## Decisions (owner, 2026-11-12)
+1. **Lookup, not snapshot.** The original is found by the draft's `In-Reply-To`
+   Message-ID in the cache when the draft is previewed or sent; no schema change.
+   Owner's reason: few drafts sit around. Consequence accepted: if the original
+   left the cache, sending/preview fails with a message saying to expand the quote
+   or delete the marker. The alternative (snapshot in the draft) was rejected for
+   the schema change; it remains the fix if lookups ever fail in practice.
+2. **Opt-in.** `[display] compose_reply_quote = "text" | "placeholder"`, default
+   `"text"` (today's behaviour, so an upstream PR changes nothing unasked); Settings
+   > Editor picker. The owner's own config is set to `"placeholder"`.
+3. **Marker:** one reserved rune, shown by the composer as a dim labelled line
+   `⁅ quoted message ⁆`; the editor still holds the rune.
+4. **Images in the quote** (recommended by me after comparing with what Gmail does;
+   the owner asked, not yet confirmed): keep remote `https` images, drop `http`
+   images and 1x1 pixels, drop inline (`cid:`) images keeping their alt text;
+   re-embedding inline images is a follow-up.
 
 ## Tests
 Resolution to HTML + text for tables, lists, nested quotes, hostile HTML
