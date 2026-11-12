@@ -821,10 +821,11 @@ element rather than in a `<style>` block because mail clients drop or ignore
 style blocks. It applies to mail you send only. It changes neither the text
 part, nor how tables look while you compose, nor how incoming mail is shown.
 
-Gmail on the web shows an unstyled table with no borders (observed). The styled
-result in Gmail, Outlook, Gmail mobile and dark-mode clients has not been
-checked yet. The `#999` border was chosen to read on light and dark backgrounds,
-not tested on either.
+Checked: Gmail on the web (2026-11-12). Without styling it shows a bare table with
+no borders; with `basic` it shows borders, cell padding, the bold header and the
+column alignment. Not checked yet: Outlook, Gmail mobile and dark-mode clients.
+The `#999` border was chosen to read on light and dark backgrounds, not tested
+on either.
 
 ### Templates
 
