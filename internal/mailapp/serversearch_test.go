@@ -112,3 +112,21 @@ func TestAppliedWindowIsReportedOnlyWhenAdded(t *testing.T) {
 		t.Errorf("summary %q should say the window", text)
 	}
 }
+
+func TestWithWindowTextAppendsOnlyWhenTheWindowApplies(t *testing.T) {
+	now := time.Now()
+	for query, want := range map[string]string{
+		"from:ann":               "from:ann after:365d",
+		"  has:attachment ":      "has:attachment after:365d",
+		"from:ann after:7d":      "from:ann after:7d",
+		"from:ann on:2026-03-03": "from:ann on:2026-03-03",
+	} {
+		got, added := WithWindowText(query, now, 365)
+		if got != want || added != (got != query) {
+			t.Errorf("%q -> %q (added=%v), want %q", query, got, added, want)
+		}
+	}
+	if got, added := WithWindowText("from:ann", now, 0); added || got != "from:ann" {
+		t.Errorf("window 0 changed the query: %q", got)
+	}
+}

@@ -66,13 +66,23 @@ func (m Model) startServerSearch() (tea.Model, tea.Cmd) {
 		m.setStatus("the server cannot search that on its own — add a word, sender, subject or date ("+mailapp.DescribeTerms(skipped)+" is checked locally)", true)
 		return m, m.clearStatusCmd()
 	}
+	// Write the window into the search field so the limit is visible, and show
+	// the local results for the same text.
+	var cmds []tea.Cmd
+	if text, added := mailapp.WithWindowText(query, time.Now(), m.cfg.Display.ServerSearchWindowDays); added {
+		query = text
+		m.searchInput.SetValue(query)
+		m.searchInput.CursorEnd()
+		m.searchQuery = query
+		cmds = append(cmds, m.searchAllMessagesCmd(query))
+	}
 	scope := m.searchScopeAccounts()
 	names := make([]string, 0, len(scope))
 	for _, a := range scope {
 		names = append(names, a.Name)
 	}
 	m.setStatus("searching the server ("+strings.Join(names, ", ")+")…", false)
-	return m, m.serverSearchCmd(query, scope)
+	return m, tea.Batch(append(cmds, m.serverSearchCmd(query, scope))...)
 }
 
 func (m Model) serverSearchCmd(query string, scope []db.Account) tea.Cmd {

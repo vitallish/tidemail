@@ -237,8 +237,8 @@ the mail server as well:
 - The normal search then runs again over the larger cache, so the results, order,
   tags and `has:attachment` work as for any search.
 - Unless the search has its own `after:`, `before:` or `on:`, the server is only
-  asked for mail from the last 365 days (`after:365d` is added for you, and the
-  status line says "last 365 days"). That keeps searches on big mailboxes quick,
+  asked for mail from the last 365 days: `after:365d` is added to the search field
+  for you, where you can see it, edit it or replace it. That keeps searches on big mailboxes quick,
   and it is what lets a search with only `has:attachment` run: the server gets a
   date to search on, and the attachment test is done on what comes back. Change
   the number in **Settings → Editor → Server search window (days)**

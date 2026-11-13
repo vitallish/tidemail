@@ -253,22 +253,36 @@ func TestServerSearchKeyWorksWhileTypingAndAfterEnter(t *testing.T) {
 	}
 }
 
-func TestServerSearchDefaultWindowAppliesUnlessTheQueryHasADate(t *testing.T) {
+func TestServerSearchWritesTheWindowIntoTheSearchField(t *testing.T) {
 	f := newServerSearchFixture(t)
 	f.model.cfg.Display.ServerSearchWindowDays = 30
-	// The fixture's mail is from March 2026, so a 30-day window finds none of it...
-	if _, done := f.search(t, "from:ann"); done.Found != 0 {
-		t.Errorf("windowed search found %d, want 0 outside the window", done.Found)
-	}
-	// ...a date typed in the query replaces the window...
-	if _, done := f.search(t, "from:ann after:2026-01-01"); done.Found != 2 {
-		t.Errorf("explicit date found %d, want 2", done.Found)
-	}
-	// ...and a window makes a bare has:attachment runnable (it is no longer refused).
 	m := f.model
+	m.searchQuery = "from:ann"
+	next, cmd := m.startServerSearch()
+	m = next.(Model)
+	if cmd == nil || m.searchQuery != "from:ann after:30d" || m.searchInput.Value() != "from:ann after:30d" {
+		t.Fatalf("the window should be visible in the field: query %q, field %q", m.searchQuery, m.searchInput.Value())
+	}
+	// A date the user typed is left alone.
+	m = f.model
+	m.searchQuery = "from:ann after:2026-01-01"
+	next, _ = m.startServerSearch()
+	if got := next.(Model).searchQuery; got != "from:ann after:2026-01-01" {
+		t.Errorf("explicit date: query became %q", got)
+	}
+	// A bare has:attachment is no longer refused: the window gives the server a date.
+	m = f.model
 	m.searchQuery = "has:attachment"
-	next, _ := m.startServerSearch()
-	if got := next.(Model).statusMsg; !strings.Contains(got, "searching the server") {
-		t.Errorf("bare has:attachment with a window: status %q", got)
+	next, _ = m.startServerSearch()
+	if got := next.(Model).searchQuery; got != "has:attachment after:30d" {
+		t.Errorf("bare has:attachment: query %q", got)
+	}
+	// Window off: nothing is added, and the bare search is refused again.
+	f.model.cfg.Display.ServerSearchWindowDays = 0
+	m = f.model
+	m.searchQuery = "from:ann"
+	next, _ = m.startServerSearch()
+	if got := next.(Model).searchQuery; got != "from:ann" {
+		t.Errorf("window off: query %q", got)
 	}
 }
