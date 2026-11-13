@@ -878,6 +878,26 @@ images together up to 20 MB, after processing.
 **Plain-text readers.** The plain-text part of the message shows `[image: alt text]` where an
 inline image is, never the Markdown reference. Remote images keep their Markdown.
 
+**Pasting an image from the clipboard.** With a screenshot (or any image) on the clipboard,
+press `Ctrl+V` in compose, or choose **Paste image from clipboard** in the command palette.
+TideMail attaches the image as `image-1.png` (then `image-2.png`, and so on, skipping names already
+attached; a JPEG or GIF keeps its type) and writes `![](image-1.png)` into the body at the
+cursor, moving focus there first. It is then an ordinary inline image, so everything above
+applies, and the live preview shows it as soon as it is pasted. Add a description between the
+brackets if you want one: `![the survival curve](image-1.png)`. The same image pasted twice is
+attached once and referenced twice.
+
+`Ctrl+V` only pastes the image when the clipboard holds an image and no text. Copying from a web
+page or a spreadsheet puts text on the clipboard as well, and then `Ctrl+V` pastes the text as
+usual; the palette command always takes the image. TideMail reads the clipboard only when you ask.
+
+This works on Linux, through `wl-paste` on Wayland (package `wl-clipboard`) or `xclip` on X11, and
+reads the clipboard of the machine TideMail runs on (over SSH that is the remote one). PNG, JPEG
+and GIF are taken as they are; BMP, TIFF and WebP are converted to PNG. Images up to 20 MB are
+accepted. macOS and Windows say that image paste is not supported yet. Under tmux, the
+Wayland session must be visible to the tmux server: if `wl-paste` fails after you log out and
+back in, add `set -ga update-environment WAYLAND_DISPLAY` to `tmux.conf` and start a new session.
+
 **Mistakes are reported, not ignored.** A name with no matching attachment, a file that is not
 an image, a path, or an unsupported format stops the send and says which image is wrong. In the
 preview (`F4`) the page still opens, with a broken-image box where the image should be, and the
