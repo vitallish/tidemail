@@ -69,3 +69,25 @@ func TestRelatedIsInTheCommandPaletteOnlyWithAMessage(t *testing.T) {
 		t.Errorf("palette command did not start the search")
 	}
 }
+
+func TestRelatedSearchOpensTheThread(t *testing.T) {
+	m := relatedTestModel(t)
+	m.cfg.Display.ThreadedConversations = true
+	conversation := []db.Message{
+		{ID: 41, MailboxID: m.messages[0].MailboxID, UID: 1, Subject: "Budget", MessageID: "<a@t>"},
+		{ID: 42, MailboxID: m.messages[0].MailboxID, UID: 2, Subject: "Re: Budget", MessageID: "<b@t>", InReplyTo: "<a@t>", References: "<a@t>"},
+	}
+	m.messages = conversation
+	m.searchMode, m.searchQuery = true, "related:42"
+	m.applyFilter()
+	if len(m.messageThreads) != 1 || len(m.messageRows) != 2 {
+		t.Fatalf("related search: %d threads, %d rows; want one thread opened to 2 rows", len(m.messageThreads), len(m.messageRows))
+	}
+	// An ordinary search keeps threads closed.
+	m.expandedMessages, m.expansionView = nil, conversationView{}
+	m.searchQuery = "budget"
+	m.applyFilter()
+	if len(m.messageRows) != 1 {
+		t.Errorf("ordinary search: %d rows, want the thread collapsed to 1", len(m.messageRows))
+	}
+}

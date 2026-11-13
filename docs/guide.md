@@ -209,7 +209,7 @@ command takes the same operators.
 ### Related messages
 
 Press `L` on a message (in the list or open in the content pane) to see its whole
-conversation: earlier messages, later ones, and your own replies, from every
+conversation (opened out, not collapsed to one row): earlier messages, later ones, and your own replies, from every
 folder of the account, newest first with the folder shown on each row. It is an
 ordinary search whose query is `related:<id>` (the same term works in the search
 box and `tidemail messages search "related:cache:123"`), so you can add to it

@@ -24,7 +24,7 @@ All notable changes to TideMail are documented in this file.
 - `L` on a message shows its whole conversation from every folder of the account,
   found by reply headers (`related:<id>`, also `tidemail messages search
   "related:cache:123" [--server]`); `Ctrl+G` also fetches conversation messages the
-  cache lacks.
+  cache lacks. The conversation opens out instead of showing one collapsed row.
 
 ### Fixed
 

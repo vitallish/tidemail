@@ -2,9 +2,11 @@ package ui
 
 import (
 	"sort"
+	"time"
 
 	"github.com/allisonhere/tidemail/internal/conversation"
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/searchquery"
 )
 
 // messageThread is a conversation from TideMail's shared thread engine.
@@ -86,7 +88,27 @@ func (m *Model) rebuildMessageThreads() {
 		return less(threads[i].Representative, threads[j].Representative)
 	})
 	m.messageThreads = threads
+	if m.expandedMessages == nil && m.searchActive() && searchIsRelated(m.searchQuery) {
+		// A conversation search exists to show the conversation: open it. Once the
+		// user collapses a thread the map is no longer nil, so that sticks.
+		m.expandedMessages = make(map[int64]bool)
+		for _, t := range threads {
+			for _, msg := range t.Messages {
+				m.expandedMessages[msg.ID] = true
+			}
+		}
+	}
 	m.rebuildMessageRows()
+}
+
+// searchIsRelated reports whether query asks for a message's conversation.
+func searchIsRelated(query string) bool {
+	for _, t := range searchquery.Parse(query, time.Now()).Terms() {
+		if t.Field == searchquery.Related && !t.Negate {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) threadExpanded(thread messageThread) bool {
