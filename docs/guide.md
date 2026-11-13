@@ -1261,6 +1261,27 @@ launched from, so put a path in the command line (`yazi ~/Documents
 --chooser-file={chooser}`) to start elsewhere. The setting needs `sh`, so on
 Windows the built-in browser is always used.
 
+### Rebinding keys
+
+Most keys are fixed, but a few can be changed in a `[keys]` table in
+`config.toml`. Each entry is a key name and a list of keys; the first key is the
+one shown in hints and help. Currently supported:
+
+| Name | Default | Action |
+|---|---|---|
+| `AttachFile` | `alt+f` | Attach a file in compose |
+
+```toml
+[keys]
+AttachFile = ["ctrl+o"]   # for terminals or setups where Alt chords don't work
+```
+
+An unknown name, or an entry with no key, is reported in the status line and
+ignored; the other entries still apply. TideMail does not check that the new
+key is free, so pick one that nothing else in the same screen uses. The compose
+footer and the command palette follow the new key. Changes apply at startup and
+after saving Settings.
+
 A standalone `⁂` in the compose body marks where your signature will be inserted
 when sending. New messages, replies, forwards, and email-link compositions include
 it automatically; in replies and forwards it appears before quoted correspondence.

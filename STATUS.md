@@ -119,7 +119,8 @@ Current release: **v1.9.0**.
   `Alt+R` regex. Requires Ripple v0.5.0.
 - **Compose attachments**: `Alt+F` can run an external file manager
   (`file_picker_cmd`, e.g. yazi with `--chooser-file={chooser}`) instead of the
-  built-in browser; every path it writes is attached. Unix only.
+  built-in browser; every path it writes is attached. Unix only. The attach key
+  can be rebound with `[keys] AttachFile = [...]` (the first overridable key).
 - **Compose**: optional vim mode (`compose_vim`), backed by the extracted
   [`ripple`](https://github.com/allisonhere/ripple) editor library.
   The body uses upstream word-aware soft wrapping with character fallback for

@@ -61,6 +61,10 @@ All notable changes to TideMail are documented in this file.
   found by reply headers (`related:<id>`, also `tidemail messages search
   "related:cache:123" [--server]`); `Ctrl+G` also fetches conversation messages the
   cache lacks. The conversation opens out instead of showing one collapsed row.
+- A `[keys]` table in `config.toml` rebinds individual keys by name. Only
+  `AttachFile` (default `Alt+F`) is supported so far, e.g.
+  `AttachFile = ["ctrl+o"]`; the compose footer now shows the attach key and the
+  command palette follows it.
 
 ### Fixed
 

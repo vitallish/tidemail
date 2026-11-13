@@ -344,7 +344,10 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 		m.compose = m.compose.expandQuote()
 		return m, nil
 	case "compose-attach":
-		return m.handleCompose(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f"), Alt: true})
+		// Call the action itself, not the default key: the key is configurable.
+		var cmd tea.Cmd
+		m.compose, cmd = m.compose.startAttachPick()
+		return m, cmd
 	case "compose-remove-attach":
 		return m.handleCompose(tea.KeyMsg{Type: tea.KeyCtrlR})
 	case "compose-cycle-sender":
