@@ -216,6 +216,8 @@ type DisplayConfig struct {
 	ComposeWordWrap         bool   `toml:"compose_word_wrap"`    // wrap compose text at word boundaries (on by default)
 	ComposeSpell            bool   `toml:"compose_spell"`        // offline spell check in compose (off by default)
 	ComposeSpellLang        string `toml:"compose_spell_lang"`   // spell check language code; empty means English
+	ComposeTableStyle       string `toml:"compose_table_style"`  // inline styling for sent Markdown tables: none (default), basic, custom
+	ComposeTableCSS         string `toml:"compose_table_css"`    // cell CSS declarations used when compose_table_style = "custom"
 	// Interactive CLI only; scripted commands ignore these.
 	CLIQuitAfterSend bool               `toml:"cli_quit_after_send"` // leave `tidemail cli` after a successful send or draft
 	CLISkipReview    bool               `toml:"cli_skip_review"`     // skip the wizard's review step when undo or a draft makes it safe
@@ -274,6 +276,26 @@ func NormalizeTagEnds(s string) string {
 		return TagEndsNone
 	}
 	return TagEndsSquare
+}
+
+// Table styles for Markdown tables in sent mail ([display] compose_table_style).
+const (
+	TableStyleNone   = "none"
+	TableStyleBasic  = "basic"
+	TableStyleCustom = "custom"
+)
+
+// NormalizeTableStyle returns the known style named by s (case and surrounding
+// space ignored). Empty means none. ok is false for an unrecognised value, which
+// is treated as none so a typo never changes outgoing mail; callers warn.
+func NormalizeTableStyle(s string) (style string, ok bool) {
+	switch v := strings.ToLower(strings.TrimSpace(s)); v {
+	case "", TableStyleNone:
+		return TableStyleNone, true
+	case TableStyleBasic, TableStyleCustom:
+		return v, true
+	}
+	return TableStyleNone, false
 }
 
 // NormalizeTagStyle returns a known tag style, defaulting to pills.

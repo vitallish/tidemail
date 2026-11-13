@@ -123,6 +123,9 @@ func run() (code int, restartExec string) {
 		return 1, ""
 	}
 	applyStartupOverrides(&cfg, opts)
+	if _, ok := config.NormalizeTableStyle(cfg.Display.ComposeTableStyle); !ok {
+		fmt.Fprintf(os.Stderr, "warning: compose_table_style %q is not none, basic or custom; tables are sent unstyled\n", cfg.Display.ComposeTableStyle)
+	}
 	if warnings, err := config.SecurityWarnings(); err != nil {
 		fmt.Fprintln(os.Stderr, "warning: could not check config permissions:", config.RedactSecrets(err.Error(), cfg))
 	} else {
