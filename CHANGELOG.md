@@ -18,6 +18,13 @@ All notable changes to TideMail are documented in this file.
   adds borders and cell padding to them as inline styles that Gmail honours:
   `none` (default, unchanged), `basic`, or `custom` with your own CSS in
   `compose_table_css` (config file only). See "Tables in messages" in the guide.
+- Reply quote marker (optional, **Settings → Editor → Reply quote marker** or
+  `compose_reply_marker = true`): a new reply holds a `⁅ quoted message ⁆` line
+  that becomes the original, with its tables, lists and links, when previewed or
+  sent (plus a `> ` text copy). Move or delete the line to reply above, below or
+  inline, or send no quote. `F3` views or copies the original; `e` there expands it
+  into editable Markdown. `tidemail draft create|send --reply-to cache:ID [--quote
+  marker|text|none]` builds the same reply from the command line.
 - Inline images in composed mail. Attach an image, then write `![alt](name.png)` with its file
   name: it is sent inside the message body (a `multipart/related` part with a `Content-ID`)
   instead of as an attachment, shown at most 600 pixels wide and embedded at twice that for

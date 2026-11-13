@@ -108,6 +108,19 @@ Fill the body from a template; see
 Not combinable with the other body options.
 Piped standard input is the body when none of these is given.
 .TP
+.BI \-\-reply\-to " ID"
+Answer a cached message (an ID from
+.B messages list
+such as cache:123): sets In\-Reply\-To and References, defaults the subject to Re: and the
+recipient to the original's Reply\-To or sender, and quotes the original as
+.B \-\-quote
+says.
+.TP
+.BI \-\-quote " MODE"
+With \-\-reply\-to: marker (the default; the original's formatted HTML goes where the
+quote marker line is, resolved when the message is built), text (an editable Markdown
+quote is copied into the body) or none.
+.TP
 .BI \-\-attach " PATH"
 Attach a file; may be repeated.
 .TP

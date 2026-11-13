@@ -97,6 +97,7 @@ type KeyMap struct {
 	GrammarCheck    key.Binding
 	SpellCheck      key.Binding
 	PreviewDraft    key.Binding
+	ViewQuote       key.Binding
 	Templates       key.Binding
 
 	// Overlay / input
@@ -211,6 +212,7 @@ var DefaultKeys = KeyMap{
 	SpellCheck:   key.NewBinding(key.WithKeys("f7"), key.WithHelp("f7", "spell check")),
 	Templates:    key.NewBinding(key.WithKeys("f6"), key.WithHelp("f6", "templates")),
 	PreviewDraft: key.NewBinding(key.WithKeys("f4"), key.WithHelp("f4", "preview in browser")),
+	ViewQuote:    key.NewBinding(key.WithKeys("f3"), key.WithHelp("f3", "view the quoted message")),
 	PGPSign:      key.NewBinding(key.WithKeys("alt+s", "f8"), key.WithHelp("alt+s", "sign (PGP)")),
 	PGPEncrypt:   key.NewBinding(key.WithKeys("alt+e", "f9"), key.WithHelp("alt+e", "encrypt (PGP)")),
 

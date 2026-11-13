@@ -557,6 +557,7 @@ compose_word_wrap = true  # wrap compose text between words (default); false wra
 file_picker_cmd = "yazi --chooser-file={chooser}"  # optional: your file manager for Alt+F attachments
 compose_table_style = "none"  # inline borders for Markdown tables in sent mail: "none", "basic" or "custom"
 # compose_table_css = "border:1px solid #444;padding:6px 10px"  # cell style for "custom"
+compose_reply_marker = false    # true: replies start with a ⁑ quote marker, resolved at send time with the original's formatting (F3 views it)
 compose_preview_server = false  # F4 preview: true serves a live page from a local port (127.0.0.1) instead of a static file
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
