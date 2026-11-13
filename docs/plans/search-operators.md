@@ -79,6 +79,13 @@ search result with the folder on each row. Server step: IMAP
    `has:attachment` over uncached mail is refused with a status note
    ("add another term, or sync more history") rather than fetching a whole
    folder. Works on Proton Bridge because it needs nothing from the server.
+   Revised 2026-11-12 (owner, after trying it): a server search also gets
+   `after:<N>d` unless the query has a date, N = `server_search_window_days`
+   (default 365, 0 = off). Reason: long searches on big mailboxes, and it gives
+   a bare `has:attachment` a criterion the server can run, so it is no longer
+   refused while the window is on. Rejected: a separate "attachments only"
+   mode, since the window is simpler and also speeds every other search.
+   Cost: mail older than the window is not reached unless the query says so.
 
 ## Docs and bookkeeping
 Guide section (replaces the "Search covers..." paragraph and the cache note),

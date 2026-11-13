@@ -295,7 +295,7 @@ func runServerSearch(database *db.DB, cfg config.Config, query, accountName stri
 	defer sessions.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), mailapp.ServerSearchTimeout)
 	defer cancel()
-	res, err := mailapp.ServerSearch(ctx, database, sessions, targets, query, time.Now())
+	res, err := mailapp.ServerSearch(ctx, database, sessions, targets, query, time.Now(), cfg.Display.ServerSearchWindowDays)
 	var refused *mailapp.NothingToSearchError
 	switch {
 	case errors.As(err, &refused):
