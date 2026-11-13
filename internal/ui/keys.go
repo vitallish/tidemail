@@ -94,6 +94,7 @@ type KeyMap struct {
 	CycleSender     key.Binding
 	GrammarCheck    key.Binding
 	SpellCheck      key.Binding
+	PreviewDraft    key.Binding
 	Templates       key.Binding
 
 	// Overlay / input
@@ -205,6 +206,7 @@ var DefaultKeys = KeyMap{
 	GrammarCheck: key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "fix grammar")),
 	SpellCheck:   key.NewBinding(key.WithKeys("f7"), key.WithHelp("f7", "spell check")),
 	Templates:    key.NewBinding(key.WithKeys("f6"), key.WithHelp("f6", "templates")),
+	PreviewDraft: key.NewBinding(key.WithKeys("f4"), key.WithHelp("f4", "preview in browser")),
 	PGPSign:      key.NewBinding(key.WithKeys("alt+s", "f8"), key.WithHelp("alt+s", "sign (PGP)")),
 	PGPEncrypt:   key.NewBinding(key.WithKeys("alt+e", "f9"), key.WithHelp("alt+e", "encrypt (PGP)")),
 

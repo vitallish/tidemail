@@ -92,6 +92,7 @@ type ComposeModel struct {
 	subjectInput textinput.Model
 	bodyInput    editorArea
 	bodyMouse    composeMouseState
+	preview      livePreview // the F4 browser preview
 
 	maximized    bool // Session-only; every new composer starts compact.
 	focusedField composeField
@@ -725,6 +726,26 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 	case filePickerDoneMsg:
 		return c.attachPicked(msg), nil, false
 	}
+	if _, ok := msg.(draftPreviewTickMsg); ok {
+		if !c.preview.live {
+			return c, nil, false // a stale tick from an earlier composer
+		}
+		c = c.refreshLivePreview()
+		if !c.preview.live {
+			return c, nil, false // the server went away; end the chain
+		}
+		return c, previewTick(), false
+	}
+	if done, ok := msg.(draftPreviewMsg); ok {
+		c.statusMsg, c.isErr = "Preview opened in browser", false
+		if done.note != "" {
+			c.statusMsg = done.note
+		}
+		if done.err != nil {
+			c.statusMsg, c.isErr = fmt.Sprintf("preview: %v", done.err), true
+		}
+		return c, nil, false
+	}
 	km, ok := msg.(tea.KeyMsg)
 	if !ok {
 		var cmd tea.Cmd
@@ -790,6 +811,11 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 
 	case km.String() == "ctrl+s" || km.String() == "ctrl+d":
 		return c.send()
+
+	case keyMatches(km, keys.PreviewDraft):
+		var cmd tea.Cmd
+		c, cmd = c.previewDraft()
+		return c, cmd, false
 
 	case keyMatches(km, keys.SpellCheck):
 		c.openSpell()

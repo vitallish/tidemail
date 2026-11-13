@@ -89,6 +89,8 @@ One inbox, 51 built-in themes in 23 families — Catppuccin, Tokyo Night, Rosé 
   `F6` opens canned replies (six built-ins, plus any `.md` or `.txt` files in
   `~/.config/tidemail/templates`) with the recipient's name filled in; see
   [Templates](docs/guide.md#templates).
+  `F4` previews the draft's HTML in your browser before you send
+  (see [Previewing a draft](docs/guide.md#previewing-a-draft-in-the-browser)).
 - **See the pictures, not just the alt text.**   On Ghostty, Kitty, and Rio, images in HTML mail render inline in the reading
   pane, sized to fit and loaded in the background so browsing stays quick.
   Remote images wait until
@@ -553,6 +555,7 @@ compose_word_wrap = true  # wrap compose text between words (default); false wra
 file_picker_cmd = "yazi --chooser-file={chooser}"  # optional: your file manager for Alt+F attachments
 compose_table_style = "none"  # inline borders for Markdown tables in sent mail: "none", "basic" or "custom"
 # compose_table_css = "border:1px solid #444;padding:6px 10px"  # cell style for "custom"
+compose_preview_server = false  # F4 preview: true serves a live page from a local port (127.0.0.1) instead of a static file
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]
