@@ -156,8 +156,13 @@ of the server; the text report says so. With the window turned off (`0`), a
 search with nothing the server can answer on its own, such as `has:attachment`,
 is refused with exit status 2 rather than downloading a whole folder.
 
+`related:cache:123` selects the conversation of cached message 123 (reply headers,
+all folders of its account); with `--server` it also downloads conversation
+messages the cache lacks.
+
 ```bash
 tidemail messages search "from:ann after:30d" --server --account Work --json
+tidemail messages search "related:cache:123" --server --json
 ```
 
 List and search results contain metadata, including subject, sender, recipients,

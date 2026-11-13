@@ -25,6 +25,7 @@ NextLink,"ctrl+n,alt+n",ctrl+n,next LINKS entry (scroll into view; ctrl+c copies
 PrevLink,alt+p,alt+p,previous LINKS entry (scroll into view),content
 Search,/,/,search,main
 ServerSearch,ctrl+g,ctrl+g,while searching: also search the server for mail not yet cached,main
+Related,L,L,show the highlighted message's conversation from every folder (related search),main
 UnreadOnly,u,u,toggle unread only,main
 Compose,c,c,compose (one account starts in To; multiple accounts start in From),main
 Reply,r,r,reply,main

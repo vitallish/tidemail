@@ -76,6 +76,8 @@ func termCriteria(t searchquery.Term) (imap.SearchCriteria, bool) {
 		c.Header = []imap.SearchCriteriaHeaderField{{Key: "To", Value: t.Value}}
 	case searchquery.CC:
 		c.Header = []imap.SearchCriteriaHeaderField{{Key: "Cc", Value: t.Value}}
+	case searchquery.HeaderMatch:
+		c.Header = []imap.SearchCriteriaHeaderField{{Key: t.Key, Value: t.Value}}
 	case searchquery.Date:
 		// The Date: header, as the local search uses; IMAP compares whole days.
 		c.SentSince, c.SentBefore = t.Start, t.End

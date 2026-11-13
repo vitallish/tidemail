@@ -50,6 +50,10 @@ All notable changes to TideMail are documented in this file.
   A server search only asks for the last 365 days unless the query has its own
   date (Settings → Editor → Server search window, `server_search_window_days`;
   0 = no limit), which also lets `has:attachment` alone run.
+- `L` on a message shows its whole conversation from every folder of the account,
+  found by reply headers (`related:<id>`, also `tidemail messages search
+  "related:cache:123" [--server]`); `Ctrl+G` also fetches conversation messages the
+  cache lacks. The conversation opens out instead of showing one collapsed row.
 
 ### Fixed
 

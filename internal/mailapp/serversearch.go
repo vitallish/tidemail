@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,7 +85,11 @@ func DescribeTerms(terms []searchquery.Term) string {
 // query has no date of its own (see WithServerWindow); 0 means no limit.
 func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.SessionPool, targets []SearchTarget, query string, now time.Time, windowDays int) (ServerSearchResult, error) {
 	var res ServerSearchResult
-	criteria, skipped, ok := imapClient.SearchCriteria(ServerQuery(query, now, windowDays))
+	parsed, err := expandRelated(database, ServerQuery(query, now, windowDays))
+	if err != nil {
+		return res, err
+	}
+	criteria, skipped, ok := imapClient.SearchCriteria(parsed)
 	if !ok {
 		return res, &NothingToSearchError{Skipped: skipped}
 	}
@@ -121,6 +126,53 @@ func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.Ses
 		return res, errors.New(strings.Join(res.Errs, "; "))
 	}
 	return res, nil
+}
+
+// relatedIDLimit caps how many Message-IDs one related: search sends to the
+// server; each becomes three header searches.
+const relatedIDLimit = 20
+
+// expandRelated replaces each related:<id> term with header searches the server
+// can run: for every Message-ID in that message's conversation (its own and the
+// ones it references or is referenced by), a Message-ID, References or
+// In-Reply-To header containing it. That finds ancestors and replies the cache
+// lacks; once downloaded, the local conversation search includes them. A
+// negated related: is left alone and filtered locally.
+func expandRelated(database *db.DB, q searchquery.Query) (searchquery.Query, error) {
+	var out searchquery.Query
+	out.Problems = q.Problems
+	for _, clause := range q.Clauses {
+		var expanded []searchquery.Term
+		for _, term := range clause {
+			if term.Field != searchquery.Related || term.Negate {
+				expanded = append(expanded, term)
+				continue
+			}
+			id, err := strconv.ParseInt(term.Value, 10, 64)
+			if err != nil {
+				continue
+			}
+			tokens, err := database.RelatedMessageIDTokens(id)
+			if err != nil {
+				return q, err
+			}
+			if len(tokens) == 0 {
+				return q, fmt.Errorf("message %d is not in the cache, or has no Message-ID to follow", id)
+			}
+			if len(tokens) > relatedIDLimit {
+				tokens = tokens[:relatedIDLimit]
+			}
+			for _, token := range tokens {
+				for _, header := range []string{"Message-ID", "References", "In-Reply-To"} {
+					expanded = append(expanded, searchquery.Term{Field: searchquery.HeaderMatch, Key: header, Value: token})
+				}
+			}
+		}
+		if len(expanded) > 0 {
+			out.Clauses = append(out.Clauses, expanded)
+		}
+	}
+	return out, nil
 }
 
 // ServerQuery parses a search the way the server search runs it: with the

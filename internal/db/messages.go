@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -170,7 +171,12 @@ func (db *DB) SearchAllMessagesPage(query string, unreadOnly bool, limit, offset
 }
 
 func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limit, offset int) ([]Message, int, error) {
-	compiled := compileSearch(searchquery.Parse(query, time.Now()))
+	parsed := searchquery.Parse(query, time.Now())
+	related, err := db.resolveRelated(parsed)
+	if err != nil {
+		return nil, 0, err
+	}
+	compiled := compileSearch(parsed, related)
 	if compiled.empty() {
 		return nil, 0, nil
 	}
@@ -689,4 +695,27 @@ func (db *DB) EvictMessageCopies(accountID int64, key string, keep ...int64) ([]
 		}
 	}
 	return copies, nil
+}
+
+// resolveRelated looks up the conversation behind each related: term.
+func (db *DB) resolveRelated(q searchquery.Query) (map[string][]int64, error) {
+	var out map[string][]int64
+	for _, term := range q.Terms() {
+		if term.Field != searchquery.Related {
+			continue
+		}
+		id, err := strconv.ParseInt(term.Value, 10, 64)
+		if err != nil {
+			continue
+		}
+		rows, err := db.RelatedMessageIDs(id)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			out = map[string][]int64{}
+		}
+		out[term.Value] = rows
+	}
+	return out, nil
 }

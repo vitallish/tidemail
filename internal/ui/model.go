@@ -2116,6 +2116,9 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ServerSearch) && m.searchMode:
 		return m.startServerSearch()
 
+	case keyMatches(msg, m.keys.Related) && m.focused != paneAccounts:
+		return m.showRelated()
+
 	case keyMatches(msg, m.keys.Search):
 		if m.focused == paneContent && m.contentMessageID != 0 {
 			m.overlay = overlayContentSearch

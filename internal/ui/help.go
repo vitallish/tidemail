@@ -335,7 +335,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{"Attach file", "enter opens dir/attaches file; h/left parent; . toggles hidden files; letters jump"},
 				{"Save attachments", "enter opens/selects folder; h/left parent; . toggles hidden files; letters jump"},
 				{"Summary overlay", "C copies; M saves .md; z toggles quoted text; esc closes"},
-				{"Search", "/ opens a dedicated row above message subjects; type to filter globally; from: to: subject: body: after: before: on: has:attachment is:unread OR -not \"phrase\" narrow it; ctrl+g also searches the server for mail not yet cached; #tag matches classification or mail-tag names/keywords; quote names with spaces, enter keeps results, / edits again, esc exits; ctrl+f finds in content"},
+				{"Search", "/ opens a dedicated row above message subjects; type to filter globally; from: to: subject: body: after: before: on: has:attachment is:unread OR -not \"phrase\" narrow it; ctrl+g also searches the server for mail not yet cached; L shows the highlighted message's whole conversation from every folder (related:); #tag matches classification or mail-tag names/keywords; quote names with spaces, enter keeps results, / edits again, esc exits; ctrl+f finds in content"},
 				{"Confirm dialogs", "enter/y confirms; esc/n cancels"},
 			},
 		},
