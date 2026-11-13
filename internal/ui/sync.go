@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/mail"
@@ -16,40 +15,16 @@ import (
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	imapClient "github.com/allisonhere/tidemail/internal/imap"
+	"github.com/allisonhere/tidemail/internal/mailapp"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// errNoAccountConfig reports an account row with no reachable [[account]] block
-// in config.toml. Every sync path must stop on it. Syncing anyway used to mean
-// dialing a zero-value AccountConfig — empty host, port 0 — which surfaced to
-// users as the baffling "dial tcp :0: connect: connection refused".
-var errNoAccountConfig = errors.New("no account settings found for this account — open Accounts and re-enter its server details")
+// errNoAccountConfig and accountConfigFor live in mailapp so the command line
+// resolves accounts the same way.
+var errNoAccountConfig = mailapp.ErrNoAccountConfig
 
-// accountConfigFor resolves the config block that owns an account row, joining
-// on the stable config ID. The name fallback covers rows the config_id
-// migration left blank, and it only matches when exactly one config block
-// claims that name — an ambiguous name is an unresolved account, not a guess.
 func accountConfigFor(configs []config.AccountConfig, acc db.Account) (config.AccountConfig, error) {
-	if acc.ConfigID != "" {
-		for _, acfg := range configs {
-			if acfg.ID == acc.ConfigID {
-				return acfg, nil
-			}
-		}
-		return config.AccountConfig{}, fmt.Errorf("%w (%q)", errNoAccountConfig, acc.Name)
-	}
-	var found config.AccountConfig
-	matches := 0
-	for _, acfg := range configs {
-		if acfg.Name == acc.Name {
-			found = acfg
-			matches++
-		}
-	}
-	if matches != 1 {
-		return config.AccountConfig{}, fmt.Errorf("%w (%q)", errNoAccountConfig, acc.Name)
-	}
-	return found, nil
+	return mailapp.AccountConfigFor(configs, acc)
 }
 
 // sortAccountsByConfigOrder re-derives account row order from config.toml,
@@ -1018,36 +993,10 @@ func (m *Model) syncMailboxCmdWithMode(mailboxID int64, manual, passive bool) te
 	return tea.Batch(fetch, m.ensureSpinner())
 }
 
-// storeFetchedMessages upserts msgs and returns the genuinely-new unread ones
-// (previously-unseen UIDs), used to drive desktop notifications. Callers derive the
-// "N new" count from len(newMsgs).
+// storeFetchedMessages lives in mailapp so server search from the command line
+// stores mail exactly as sync does.
 func storeFetchedMessages(database *db.DB, mailboxID int64, msgs []db.Message) ([]db.Message, error) {
-	var newMsgs []db.Message
-	for _, msg := range msgs {
-		msg.MailboxID = mailboxID
-		deleted, delErr := database.MessageDeletedLocally(mailboxID, msg.UID, msg.MessageID)
-		if delErr != nil {
-			return newMsgs, delErr
-		}
-		if deleted {
-			continue
-		}
-		// Determine novelty before the upsert: SINCE re-fetches mail we already hold,
-		// and the upsert would otherwise make every poll look like new arrivals.
-		existed, exErr := database.MessageExists(mailboxID, msg.UID)
-		if err := database.UpsertMessage(msg); err != nil {
-			return newMsgs, err
-		}
-		if exErr == nil && !existed && !msg.Read {
-			// Carry the row ID so later consumers (plugin events) can reference
-			// the stored message.
-			if id, idErr := database.MessageIDByUID(mailboxID, msg.UID); idErr == nil {
-				msg.ID = id
-			}
-			newMsgs = append(newMsgs, msg)
-		}
-	}
-	return newMsgs, nil
+	return mailapp.StoreFetchedMessages(database, mailboxID, msgs)
 }
 
 // maxFetchLogBytes caps fetch.log. Past it the file is moved to fetch.log.1

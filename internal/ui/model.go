@@ -986,6 +986,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case ServerSearchDoneMsg:
+		return m.handleServerSearchDone(msg)
+
 	case MessagesLoadedMsg:
 		if msg.ReadVersion < m.readVersion {
 			cmd := m.reloadReadMessagesCmd(msg.ReadReloadIDs...)
@@ -2012,6 +2015,8 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.searchEditing = false
 			m.searchInput.Blur()
 			return m, nil
+		case keyMatches(msg, m.keys.ServerSearch):
+			return m.startServerSearch()
 		// Build on the box's own text, not searchQuery: the query is trimmed, so
 		// appending to it would drop a space typed between words.
 		case keyMatches(msg, m.keys.Backspace):
@@ -2107,6 +2112,9 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.ThemePicker):
 		m.openThemePicker()
 		return m, nil
+
+	case keyMatches(msg, m.keys.ServerSearch) && m.searchMode:
+		return m.startServerSearch()
 
 	case keyMatches(msg, m.keys.Search):
 		if m.focused == paneContent && m.contentMessageID != 0 {
@@ -4006,7 +4014,7 @@ func (m Model) statusBarContextHintStrip() string {
 	if m.searchMode && m.searchEditing {
 		return m.statusBarJoin(
 			m.statusBarInlineText(m.styles.StatusBar, "Search"),
-			m.styles.StatusHint.Render("type search  enter finish  esc exit  backspace erase"),
+			m.styles.StatusHint.Render("type search  enter finish  ctrl+g search server  esc exit"),
 		)
 	}
 	parts := []string{

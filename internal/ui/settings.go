@@ -99,6 +99,7 @@ const (
 	sfSpellDictionary
 	sfSendDelay
 	sfSendMaxAttempts
+	sfServerSearchWindow
 	sfCLIQuitAfterSend
 	sfCLISkipReview
 	sfCLISignature
@@ -384,6 +385,7 @@ type Settings struct {
 	tagPickerIdx            int // index into tagAppearanceOptions
 	readingWidthInput       textinput.Model
 	sendMaxAttemptsInput    textinput.Model
+	serverSearchWindowInput textinput.Model
 	sendDelayInput          textinput.Model
 	browserInput            textinput.Model
 	feedMaxBodyInput        textinput.Model
@@ -514,6 +516,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		tagPickerIdx:            tagAppearanceIndex(cfg.Display.TagStyle, cfg.Display.TagEnds),
 		readingWidthInput:       mkInput(strconv.Itoa(cfg.Display.ReadingWidth), "0 (no limit)", false),
 		sendMaxAttemptsInput:    mkInput(strconv.Itoa(config.NormalizeSendMaxAttempts(cfg.Display.SendMaxAttempts)), "3 (1 = no retries)", false),
+		serverSearchWindowInput: mkInput(strconv.Itoa(config.NormalizeServerSearchWindowDays(cfg.Display.ServerSearchWindowDays)), "365 (0 = no limit)", false),
 		sendDelayInput:          mkInput(strconv.Itoa(cfg.Display.SendDelaySeconds), "5 (0 = immediate)", false),
 		browserInput:            mkInput(cfg.Display.Browser, "xdg-open", false),
 		feedMaxBodyInput:        mkInput(strconv.Itoa(cfg.Feed.MaxBodyMiB), "10", false),
@@ -612,6 +615,9 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	}
 	if n, err := strconv.Atoi(strings.TrimSpace(s.sendDelayInput.Value())); err == nil {
 		cfg.Display.SendDelaySeconds = max(0, n)
+	}
+	if n, err := strconv.Atoi(strings.TrimSpace(s.serverSearchWindowInput.Value())); err == nil {
+		cfg.Display.ServerSearchWindowDays = config.NormalizeServerSearchWindowDays(n)
 	}
 	if n, err := strconv.Atoi(strings.TrimSpace(s.sendMaxAttemptsInput.Value())); err == nil {
 		cfg.Display.SendMaxAttempts = config.NormalizeSendMaxAttempts(n)
@@ -778,6 +784,7 @@ func (s *Settings) applyFocus() {
 	s.readingWidthInput.Blur()
 	s.sendDelayInput.Blur()
 	s.sendMaxAttemptsInput.Blur()
+	s.serverSearchWindowInput.Blur()
 	s.feedMaxBodyInput.Blur()
 	s.openaiInput.Blur()
 	s.openaiModelInput.Blur()
@@ -800,6 +807,8 @@ func (s *Settings) applyFocus() {
 		s.readingWidthInput.Focus()
 	case sfSendMaxAttempts:
 		s.sendMaxAttemptsInput.Focus()
+	case sfServerSearchWindow:
+		s.serverSearchWindowInput.Focus()
 	case sfSendDelay:
 		s.sendDelayInput.Focus()
 	case sfFeedMaxBody:
@@ -857,7 +866,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		fields = append(fields, sfReadingWidth, sfShowHeaders, sfMarkReadOnOpen, sfMarkReadOnFocus, sfActionableLinks, sfFilterLinks, sfImages)
 		return append(fields, sfBrowser, sfConfirmQuit, sfNotifications, sfMouseSupport)
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeTableStyle, sfComposePreviewServer, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeTableStyle, sfComposePreviewServer, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts, sfServerSearchWindow}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1011,7 +1020,7 @@ func (s Settings) isTextInput() bool {
 		return false
 	}
 	switch s.focusedField {
-	case sfBrowser, sfFeedMaxBody, sfReadingWidth, sfSendDelay, sfSendMaxAttempts, sfAPIKey, sfOllamaURL, sfSavePath,
+	case sfBrowser, sfFeedMaxBody, sfReadingWidth, sfSendDelay, sfSendMaxAttempts, sfServerSearchWindow, sfAPIKey, sfOllamaURL, sfSavePath,
 		sfRetroBg, sfRetroFg, sfRetroAccent:
 		return true
 	}
@@ -1028,6 +1037,8 @@ func (s Settings) updateFocusedTextInput(msg tea.Msg) (Settings, tea.Cmd, bool) 
 		s.readingWidthInput, cmd = s.readingWidthInput.Update(msg)
 	case sfSendMaxAttempts:
 		s.sendMaxAttemptsInput, cmd = s.sendMaxAttemptsInput.Update(msg)
+	case sfServerSearchWindow:
+		s.serverSearchWindowInput, cmd = s.serverSearchWindowInput.Update(msg)
 	case sfSendDelay:
 		s.sendDelayInput, cmd = s.sendDelayInput.Update(msg)
 	case sfFeedMaxBody:
@@ -1124,6 +1135,8 @@ func (s Settings) focusedTextInputCursorPosition() int {
 		return s.readingWidthInput.Position()
 	case sfSendMaxAttempts:
 		return s.sendMaxAttemptsInput.Position()
+	case sfServerSearchWindow:
+		return s.serverSearchWindowInput.Position()
 	case sfSendDelay:
 		return s.sendDelayInput.Position()
 	case sfFeedMaxBody:
@@ -1964,7 +1977,7 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 		}
 		return s, nil, false
 
-	case sfBrowser, sfFeedMaxBody, sfReadingWidth, sfSendDelay, sfSendMaxAttempts, sfAPIKey, sfOllamaURL, sfSavePath,
+	case sfBrowser, sfFeedMaxBody, sfReadingWidth, sfSendDelay, sfSendMaxAttempts, sfServerSearchWindow, sfAPIKey, sfOllamaURL, sfSavePath,
 		sfRetroBg, sfRetroFg, sfRetroAccent:
 		// Enter advances to next field; everything else goes to the text input.
 		if keyMatches(key, keys.Enter) {
@@ -2215,6 +2228,7 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addAction("Personal dictionary", "view, add, or remove words you taught spell check", sfSpellDictionary)
 		b.addInput("Send delay (seconds)", s.sendDelayInput, sfSendDelay)
 		b.addInput("Maximum send attempts", s.sendMaxAttemptsInput, sfSendMaxAttempts)
+		b.addInput("Server search window (days)", s.serverSearchWindowInput, sfServerSearchWindow)
 
 	case ssCLI:
 		b.addGroup("Interactive CLI")
@@ -2785,7 +2799,7 @@ func (s Settings) aiConnectionStatusLabel() string {
 
 func (s Settings) inputWidth(field settingsField, maxWidth int) int {
 	switch field {
-	case sfFeedMaxBody, sfReadingWidth, sfSendDelay, sfSendMaxAttempts:
+	case sfFeedMaxBody, sfReadingWidth, sfSendDelay, sfSendMaxAttempts, sfServerSearchWindow:
 		return min(maxWidth, 12)
 	case sfRetroBg, sfRetroFg, sfRetroAccent:
 		return min(maxWidth, 44)
@@ -3344,6 +3358,8 @@ func (s Settings) fieldHint(field settingsField) string {
 		return "max columns for article text; 0 = no limit (e.g. 80, 100)"
 	case sfSendMaxAttempts:
 		return "1–10 total tries, including the first; 1 disables retries; retries wait 1 minute"
+	case sfServerSearchWindow:
+		return "Ctrl+G and related lookups only search mail from the last N days unless the query has after:/before:/on:; 0 = no limit"
 	case sfSendDelay:
 		return "grace period to take back a send with ctrl+z; 0 = send immediately"
 	case sfTestAIConnection:

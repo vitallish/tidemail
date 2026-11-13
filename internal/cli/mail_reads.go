@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
+	imapClient "github.com/allisonhere/tidemail/internal/imap"
 	"github.com/allisonhere/tidemail/internal/mailapp"
 )
 
@@ -40,12 +42,18 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 	limit := fs.Int("limit", 50, "Maximum results (1–1000)")
 	offset := fs.Int("offset", 0, "Results to skip")
 	unread := fs.Bool("unread", false, "Only unread messages")
+	server := fs.Bool("server", false, "search: also search the mail server and download matches not yet cached")
+	accountName := fs.String("account", "", "search --server: only this account (name or ID)")
 	usageOut := errOut
 	if hasHelpFlag(args) {
 		usageOut = out
 	}
 	fs.Usage = func() {
-		_, _ = fmt.Fprintf(usageOut, "Usage: tidemail %s %s [ID or query] [--json] [--agent] [--limit N] [--offset N]\nCached reads do not synchronize with the server.\nUse --interactive for guided input, or --no-interactive to suppress prompts.\n", command, action)
+		extra := ""
+		if command == "messages" && action == "search" {
+			extra = " [--server [--account NAME]]"
+		}
+		_, _ = fmt.Fprintf(usageOut, "Usage: tidemail %s %s [ID or query] [--json] [--agent] [--limit N] [--offset N]%s\nCached reads do not synchronize with the server; search --server is the exception.\nUse --interactive for guided input, or --no-interactive to suppress prompts.\n", command, action, extra)
 		if command == "outbox" {
 			_, _ = fmt.Fprintln(usageOut, "Use outbox process to deliver queued messages while the TUI is closed.")
 		}
@@ -58,7 +66,7 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		a := args[i]
 		if strings.HasPrefix(a, "-") {
 			options = append(options, a)
-			if (a == "--limit" || a == "--offset") && i+1 < len(args) {
+			if (a == "--limit" || a == "--offset" || a == "--account") && i+1 < len(args) {
 				i++
 				options = append(options, args[i])
 			}
@@ -83,6 +91,12 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		}
 		return fail("invalid_arguments", message, 2)
 	}
+	if (*server || *accountName != "") && (command != "messages" || action != "search") {
+		return fail("invalid_arguments", "--server and --account apply only to messages search.", 2)
+	}
+	if *accountName != "" && !*server {
+		return fail("invalid_arguments", "--account applies to --server; cached searches cover every account.", 2)
+	}
 	needsArgument := action == "read" || action == "status" || action == "search"
 	if (needsArgument && len(positionals) != 1) || (!needsArgument && len(positionals) != 0) {
 		return fail("invalid_arguments", "Provide exactly one ID or quoted search query for read, status, or search; lists take no positional arguments.", 2)
@@ -103,6 +117,11 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 	}
 	if *agent && !mailapp.Allowed(cfg, capability) {
 		return fail("permission_denied", "Agent capability "+capability+" is not enabled in agent_permissions.", 3)
+	}
+	// Searching the server contacts it and writes the cache, so it is a separate
+	// capability that the default agent permissions do not include.
+	if *agent && *server && !mailapp.Allowed(cfg, "messages.search_server") {
+		return fail("permission_denied", "Agent capability messages.search_server is not enabled in agent_permissions.", 3)
 	}
 	if command == "accounts" {
 		items := make([]map[string]any, 0, len(cfg.Accounts))
@@ -196,6 +215,18 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		data["body_html"] = m.BodyHTML
 		return readSuccess(out, jsonMode, data)
 	}
+	var serverResult *mailapp.ServerSearchResult
+	if *server {
+		res, failure := runServerSearch(database, cfg, positionals[0], *accountName)
+		if failure != nil {
+			return fail(failure.code, failure.message, failure.status)
+		}
+		serverResult = &res
+		if !jsonMode {
+			text, _ := res.Summary()
+			_, _ = fmt.Fprintln(errOut, safeTerminal(text))
+		}
+	}
 	var messages []db.Message
 	var total int
 	if action == "search" {
@@ -217,7 +248,62 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		}
 		items = append(items, data)
 	}
-	return readSuccess(out, jsonMode, readBoundedPage(items, total, *limit, *offset))
+	page := readBoundedPage(items, total, *limit, *offset)
+	if serverResult != nil {
+		page["server"] = map[string]any{"folders": serverResult.Folders, "found": serverResult.Found, "fetched": serverResult.Fetched, "not_downloaded": serverResult.Capped, "errors": serverResult.Errs, "checked_locally": len(serverResult.Skipped) > 0}
+	}
+	return readSuccess(out, jsonMode, page)
+}
+
+// cliFailure is an error as the command line reports it.
+type cliFailure struct {
+	code, message string
+	status        int
+}
+
+// runServerSearch searches the configured accounts' servers (or the one named)
+// and stores matches in the cache; the caller then searches the cache.
+func runServerSearch(database *db.DB, cfg config.Config, query, accountName string) (mailapp.ServerSearchResult, *cliFailure) {
+	accounts, err := database.ListAccounts()
+	if err != nil {
+		return mailapp.ServerSearchResult{}, &cliFailure{"database_error", "Cannot list accounts.", 1}
+	}
+	var targets []mailapp.SearchTarget
+	for _, acc := range accounts {
+		acfg, e := mailapp.AccountConfigFor(cfg.Accounts, acc)
+		if e != nil {
+			if accountName == "" {
+				continue // an account with no settings is not searchable
+			}
+			if acc.Name == accountName {
+				return mailapp.ServerSearchResult{}, &cliFailure{"invalid_arguments", fmt.Sprintf("Account %q has no server settings in config.toml.", accountName), 2}
+			}
+			continue
+		}
+		if accountName != "" && accountName != acc.Name && accountName != acfg.ID {
+			continue
+		}
+		targets = append(targets, mailapp.SearchTarget{Account: acc, Config: acfg})
+	}
+	if len(targets) == 0 {
+		if accountName != "" {
+			return mailapp.ServerSearchResult{}, &cliFailure{"not_found", fmt.Sprintf("No account named %q; see tidemail accounts list.", accountName), 1}
+		}
+		return mailapp.ServerSearchResult{}, &cliFailure{"invalid_arguments", "No account to search.", 2}
+	}
+	sessions := imapClient.NewSessionPool()
+	defer sessions.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), mailapp.ServerSearchTimeout)
+	defer cancel()
+	res, err := mailapp.ServerSearch(ctx, database, sessions, targets, query, time.Now(), cfg.Display.ServerSearchWindowDays)
+	var refused *mailapp.NothingToSearchError
+	switch {
+	case errors.As(err, &refused):
+		return res, &cliFailure{"invalid_arguments", refused.Error(), 2}
+	case err != nil:
+		return res, &cliFailure{"server_error", "Server search failed: " + safeTerminal(err.Error()), 1}
+	}
+	return res, nil
 }
 
 func readID(value string) (int64, error) {

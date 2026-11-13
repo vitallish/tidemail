@@ -99,6 +99,7 @@ func (m Model) mainCommandItems() []commandItem {
 		{id: "delete-folder", label: "Delete selected folder", enabled: hasMailbox},
 		{id: "hide-folder", label: "Hide or unhide selected folder", enabled: hasMailbox},
 		{id: "show-hidden-folders", label: m.showHiddenFoldersLabel(), enabled: len(m.mailboxes) > 0},
+		{id: "search-server", label: "Search the server for the current search", enabled: m.searchMode && strings.TrimSpace(m.searchQuery) != ""},
 		{id: "sync", label: "Sync current mailbox", enabled: hasMailbox},
 		{id: "sync-all", label: "Sync all mailboxes", enabled: len(m.mailboxes) > 0},
 		{id: "accounts", label: "Manage accounts", enabled: true},
@@ -255,6 +256,8 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 			cmd := m.setMessageReadCmd(*msg, !msg.Read, !msg.Read)
 			return m, cmd
 		}
+	case "search-server":
+		return m.startServerSearch()
 	case "sync":
 		if selected := m.selectedMailbox(); selected != nil {
 			return m, m.syncMailboxCmd(selected.ID, true)

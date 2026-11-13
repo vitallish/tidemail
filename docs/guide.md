@@ -188,6 +188,59 @@ Press `/` to search, `u` to show unread mail, and `t` to place starred messages
 first. Search covers subject, sender, recipients, and message body across every
 account and folder, and matches as you type.
 
+Operators narrow a search. Words are ANDed, so `invoice due` needs both:
+
+| Type | Finds |
+|---|---|
+| `subject:invoice`, `from:ann`, `to:bob`, `cc:carol`, `body:refund` | the word in that field only (`from:ann@example.com`, or quote a name: `from:"Ann Lee"`) |
+| `"quarterly review"` | the exact phrase, in that word order |
+| `after:2026-01-31`, `before:2026-02-15`, `on:2026-02-01` | received on or after / before / on that day (your local time) |
+| `after:7d`, `after:2w`, `after:3m`, `after:1y` | received within that long ago |
+| `has:attachment` | messages with an attachment |
+| `is:unread`, `is:read`, `is:starred` | by state |
+| `a OR b` | either (`from:ann OR from:bob invoice` means (ann or bob) and invoice) |
+| `-term` | not that term (`invoice -from:ann`, `-has:attachment`, `-#github`) |
+
+`OR` must be in capitals and joins the terms on either side of it; there are no
+parentheses. A value that cannot be read, such as `after:2026-0` while you are
+still typing it, is ignored until it is complete. The `tidemail messages search`
+command takes the same operators.
+
+### Searching the server
+
+Search normally looks only at mail TideMail has already downloaded. While a
+search is on screen (typing, or after `Enter`), press `Ctrl+G` (or run
+**Search the server for the current search** from the command palette) to ask
+the mail server as well:
+
+- It searches every folder of the account whose folder or account row is
+  highlighted in the sidebar (every account, if a row that spans accounts such
+  as the unified inbox is highlighted).
+- Matches you do not have yet are downloaded, newest first, up to 50 per
+  folder; the status line says how many more were left. Narrow the search
+  (`from:`, `after:`) to reach the rest.
+- The normal search then runs again over the larger cache, so the results, order,
+  tags and `has:attachment` work as for any search.
+- Unless the search has its own `after:`, `before:` or `on:`, the server is only
+  asked for mail from the last 365 days: `after:365d` is added to the search field
+  for you, where you can see it, edit it or replace it. That keeps searches on big mailboxes quick,
+  and it is what lets a search with only `has:attachment` run: the server gets a
+  date to search on, and the attachment test is done on what comes back. Change
+  the number in **Settings → Editor → Server search window (days)**
+  (`server_search_window_days` in `config.toml`); `0` removes the limit, in which
+  case a search with nothing but `has:attachment` or a tag is refused instead of
+  downloading a whole folder. Type your own `after:` (`after:2015-01-01`) to look
+  further back for one search. Mail already downloaded is searched whatever its age.
+
+What the server can search is words, `subject:`, `from:`, `to:`, `cc:`, `body:`,
+dates (whole days, by the message's `Date` header), `is:unread`, `is:read`,
+`is:starred`, `OR` and `-`. Tags and `has:attachment` are never sent: IMAP has no
+attachment test and tags are local to TideMail. They still work in a server
+search as long as something else narrows it (`from:ann has:attachment`). The
+server may match words differently from TideMail (some match any part
+of a word, some only whole words), so a few downloaded messages may not appear in
+the local results.
+
 Type `#` and a tag name to search by the tags shown on message rows:
 `#github`, `#billing`, or any other category, and `#reply`, `#urgent`, or
 `#important`. Tags match as you type (`#git` already finds `#github`), several
