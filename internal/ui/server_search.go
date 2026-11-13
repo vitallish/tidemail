@@ -11,7 +11,6 @@ import (
 	"github.com/allisonhere/tidemail/internal/db"
 	imapClient "github.com/allisonhere/tidemail/internal/imap"
 	"github.com/allisonhere/tidemail/internal/mailapp"
-	"github.com/allisonhere/tidemail/internal/searchquery"
 )
 
 // Server search asks the IMAP server which mail matches the typed search and
@@ -61,7 +60,7 @@ func (m Model) startServerSearch() (tea.Model, tea.Cmd) {
 		m.setStatus("no account to search", true)
 		return m, m.clearStatusCmd()
 	}
-	parsed := searchquery.Parse(query, time.Now())
+	parsed := mailapp.ServerQuery(query, time.Now(), m.cfg.Display.ServerSearchWindowDays)
 	_, skipped, ok := imapClient.SearchCriteria(parsed)
 	if !ok {
 		m.setStatus("the server cannot search that on its own — add a word, sender, subject or date ("+mailapp.DescribeTerms(skipped)+" is checked locally)", true)
@@ -79,6 +78,7 @@ func (m Model) startServerSearch() (tea.Model, tea.Cmd) {
 func (m Model) serverSearchCmd(query string, scope []db.Account) tea.Cmd {
 	database := m.db
 	sessions := m.sessions
+	window := m.cfg.Display.ServerSearchWindowDays
 	var targets []mailapp.SearchTarget
 	var setupErrs []string
 	for _, acc := range scope {
@@ -92,7 +92,7 @@ func (m Model) serverSearchCmd(query string, scope []db.Account) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), mailapp.ServerSearchTimeout)
 		defer cancel()
-		res, err := mailapp.ServerSearch(ctx, database, sessions, targets, query, time.Now())
+		res, err := mailapp.ServerSearch(ctx, database, sessions, targets, query, time.Now(), window)
 		res.Errs = append(setupErrs, res.Errs...)
 		if err == nil && res.Folders == 0 && len(res.Errs) > 0 {
 			err = fmt.Errorf("%s", strings.Join(res.Errs, "; "))

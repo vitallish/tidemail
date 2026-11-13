@@ -59,6 +59,7 @@ func serverSearchCLIFixture(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.Accounts = []config.AccountConfig{acfg}
+	cfg.Display.ServerSearchWindowDays = 0 // the fixture's mail is old; tests of the window set their own
 	if err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -202,5 +203,25 @@ func TestSearchServerNeedsItsOwnAgentCapability(t *testing.T) {
 	}
 	if code, env, raw := runSearch(t, "from:ann", "--server", "--agent", "--json"); code != 0 || env.Data.Total != 2 {
 		t.Fatalf("with the capability: code=%d %s", code, raw)
+	}
+}
+
+func TestSearchServerDefaultWindowLimitsWhatIsAskedOfTheServer(t *testing.T) {
+	serverSearchCLIFixture(t) // mail dated March 2026
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Display.ServerSearchWindowDays = 30
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	code, env, raw := runSearch(t, "from:ann", "--server", "--json")
+	if code != 0 || env.Data.Server == nil || env.Data.Server.Found != 0 {
+		t.Fatalf("a 30-day window should find nothing from March 2026: code=%d %s", code, raw)
+	}
+	code, env, raw = runSearch(t, "from:ann after:2026-01-01", "--server", "--json")
+	if code != 0 || env.Data.Server == nil || env.Data.Server.Found != 2 {
+		t.Fatalf("an explicit date must override the window: code=%d %s", code, raw)
 	}
 }
