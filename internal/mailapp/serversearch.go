@@ -150,6 +150,17 @@ func WithServerWindow(q searchquery.Query, now time.Time, windowDays int) search
 	return out
 }
 
+// WithWindowText returns query with " after:<windowDays>d" appended when the
+// server search would add the window (see WithServerWindow), and whether it did.
+// The terminal interface writes this into the search field, so the limit is
+// visible and can be edited or replaced by a date of the user's own.
+func WithWindowText(query string, now time.Time, windowDays int) (string, bool) {
+	if appliedWindow(query, now, windowDays) == 0 {
+		return query, false
+	}
+	return strings.TrimSpace(query) + fmt.Sprintf(" after:%dd", windowDays), true
+}
+
 // appliedWindow is windowDays when ServerQuery added the window to query, else 0.
 func appliedWindow(query string, now time.Time, windowDays int) int {
 	if len(ServerQuery(query, now, windowDays).Clauses) == len(searchquery.Parse(query, now).Clauses) {
