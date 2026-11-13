@@ -158,6 +158,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{keys.Enter.Help().Key, "open sender picker or advance header fields"},
 				{"ctrl+s/ctrl+d", "send message"},
 				{"⁂", "signature position: move the symbol, or delete it to send unsigned"},
+				{"![alt](name.png)", "show an attached image inline: attach the file first, then use its file name (no paths); {width=300} sets a size"},
 				{"ctrl+p → Schedule send", "choose a future local date and time"},
 				{keys.AttachFile.Help().Key, "attach file"},
 				{keys.MaximizeCompose.Help().Key, "maximize/restore compose (session only)"},

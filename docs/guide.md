@@ -830,6 +830,61 @@ column alignment. Not checked yet: Outlook, Gmail mobile and dark-mode clients.
 The `#999` border was chosen to read on light and dark backgrounds, not tested
 on either.
 
+### Images in messages
+
+Attach the image first, then refer to it by its file name in the Markdown:
+
+```
+Here is the figure:
+
+![Kaplan-Meier curves](km-curves.png)
+```
+
+Attach with the usual attach action (`Alt+F`, or whatever you set; with `file_picker_cmd` it
+opens your file manager). The image is then sent **inline**, inside the message body, instead of
+as a separate attachment. Other attached files stay ordinary attachments. The name is matched
+without regard to upper or lower case, and the same image can be used more than once.
+
+**No file paths.** `![x](/home/me/fig.png)` and `![x](~/fig.png)` are errors, and so are `file:`
+and `cid:` sources. The draft carries the image bytes itself, so it keeps working if you move or
+delete the original file, and no path from your machine ends up in the message or in the text
+part. Pasted or received Markdown cannot make TideMail read a file on your disk.
+
+**Other sources.** An `http://` or `https://` address is left as a normal remote image: TideMail
+never downloads it, and the recipient's mail client decides whether to show it. A `data:` image
+(`data:image/png;base64,...`) is converted to an inline image like an attached one, because
+Gmail does not show `data:` images.
+
+**Size.** An image is shown at most 600 pixels wide (a usual email width) and is never enlarged.
+It is embedded at up to twice that width so it stays sharp on high-resolution screens, so a
+4000-pixel phone photo becomes about 1200 pixels wide and tens of kilobytes. To choose a size,
+write it after the image, in pandoc's style:
+
+```
+![logo](logo.png){width=120}        120 pixels
+![figure](fig.png){width=50%}       half of the 600-pixel column, so 300 pixels
+```
+
+Sizes above 600 pixels are allowed (embedding stops at 2000 pixels wide). The width and height
+are written into the HTML, which Outlook needs, and the image also scales down in a narrow
+window.
+
+**Metadata and formats.** PNG, JPEG and GIF are supported (not SVG, WebP or HEIC). A JPEG is
+always re-encoded: its rotation (EXIF orientation) is applied first, and all metadata is dropped,
+including the GPS position phones record. A PNG is re-encoded only when it has to be shrunk. A
+GIF is sent untouched, so an animation survives. Each image may be up to 20 MB, and all inline
+images together up to 20 MB, after processing.
+
+**Plain-text readers.** The plain-text part of the message shows `[image: alt text]` where an
+inline image is, never the Markdown reference. Remote images keep their Markdown.
+
+**Mistakes are reported, not ignored.** A name with no matching attachment, a file that is not
+an image, a path, or an unsupported format stops the send and says which image is wrong. In the
+preview (`F4`) the page still opens, with a broken-image box where the image should be, and the
+status line names each problem; with the live preview server it updates as you attach the file or
+fix the name. See "Previewing a draft in the browser" below: the preview shows the same processed
+pixels that are sent, and it loads remote images.
+
 ### Previewing a draft in the browser
 
 Press `F4` in compose (or choose **Preview draft in browser** from the command
@@ -882,8 +937,10 @@ loading anything from the network. If the body is invalid (for example two `⁂`
 signature markers), the status line says so, as it does when sending, and the live
 page keeps the last good version.
 
-The preview does not show the plain-text part, attachments, PGP signing or
-encryption, or inline images (drafts cannot carry those yet). Mail clients
+The preview does not show the plain-text part, other attachments, or PGP signing or
+encryption. Inline images are shown as they will be sent (see "Images in messages"),
+and remote images are loaded by your browser: that tells the image's host your address,
+as it would when the recipient opens the message. Mail clients
 restyle HTML in their own ways, so this is a close preview, not a guarantee:
 Gmail, Outlook and dark-mode clients can still differ.
 

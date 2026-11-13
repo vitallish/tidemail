@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/allisonhere/tidemail/internal/db"
 	"github.com/allisonhere/tidemail/internal/mailapp"
 	"github.com/allisonhere/tidemail/internal/previewserver"
 	tea "github.com/charmbracelet/bubbletea"
@@ -56,6 +57,8 @@ type livePreview struct {
 	live    bool                  // a tick chain is running (server mode)
 	subject string                // what the server last received, to spot changes
 	body    string                // (raw draft text, so an unchanged tick converts nothing)
+	atts    int                   // attachment count then (attaching or removing changes the images)
+	problem string                // the image problems last reported, to say so only on a change
 }
 
 func previewTick() tea.Cmd {
@@ -83,20 +86,21 @@ func openPreviewCmd(target, note string) tea.Cmd {
 // if the server cannot start it falls back to the static file and says so.
 func (c ComposeModel) previewDraft() (ComposeModel, tea.Cmd) {
 	body, subject := c.bodyInput.Value(), c.subjectInput.Value()
-	html, err := mailapp.ComposeHTML(c.selectedAccount(), body)
+	html, problems, err := mailapp.ComposeHTML(c.selectedAccount(), body, c.draftAttachments())
 	if err != nil {
 		c.statusMsg = err.Error()
 		c.isErr = true
 		return c, nil
 	}
+	c.preview.problem = strings.Join(problems, "; ")
 	fallback := ""
 	if composePreviewServer {
 		srv, err := c.ensurePreviewServer()
 		if err == nil {
 			srv.Set(previewTitle(subject), html)
-			c.preview.subject, c.preview.body = subject, body
+			c.preview.subject, c.preview.body, c.preview.atts = subject, body, len(c.attachments)
 			c.statusMsg, c.isErr = "Opening live preview in browser…", false
-			open := openPreviewCmd(srv.URL(), "Live preview opened in browser; it updates as you type")
+			open := openPreviewCmd(srv.URL(), withProblems("Live preview opened in browser; it updates as you type", problems))
 			if c.preview.live {
 				return c, open // a tick chain is already running
 			}
@@ -122,7 +126,7 @@ func (c ComposeModel) previewDraft() (ComposeModel, tea.Cmd) {
 	if note == "" {
 		note = "Preview opened in browser; press " + DefaultKeys.PreviewDraft.Help().Key + " again to refresh it"
 	}
-	return c, openPreviewCmd(c.preview.path, note)
+	return c, openPreviewCmd(c.preview.path, withProblems(note, problems))
 }
 
 // ensurePreviewServer returns the composer's running preview server, starting
@@ -151,12 +155,41 @@ func (c ComposeModel) refreshLivePreview() ComposeModel {
 	}
 	srv.Touch()
 	body, subject := c.bodyInput.Value(), c.subjectInput.Value()
-	if body == c.preview.body && subject == c.preview.subject {
+	if body == c.preview.body && subject == c.preview.subject && len(c.attachments) == c.preview.atts {
 		return c
 	}
-	c.preview.subject, c.preview.body = subject, body // do not retry until it changes again
-	if html, err := mailapp.ComposeHTML(c.selectedAccount(), body); err == nil {
-		srv.Set(previewTitle(subject), html)
+	c.preview.subject, c.preview.body, c.preview.atts = subject, body, len(c.attachments) // do not retry until it changes again
+	html, problems, err := mailapp.ComposeHTML(c.selectedAccount(), body, c.draftAttachments())
+	if err != nil {
+		return c
+	}
+	srv.Set(previewTitle(subject), html)
+	// Say so when an image problem appears or goes away, not on every tick.
+	if problem := strings.Join(problems, "; "); problem != c.preview.problem {
+		c.preview.problem = problem
+		if problem != "" {
+			c.statusMsg, c.isErr = "preview: "+problem, true
+		} else {
+			c.statusMsg, c.isErr = "preview: images fixed", false
+		}
 	}
 	return c
+}
+
+// withProblems appends image problems to a status note.
+func withProblems(note string, problems []string) string {
+	if len(problems) == 0 {
+		return note
+	}
+	return note + ", but " + strings.Join(problems, "; ")
+}
+
+// draftAttachments lists the attached files as the draft's attachments, which
+// the preview resolves image references against.
+func (c ComposeModel) draftAttachments() []db.DraftAttachment {
+	out := make([]db.DraftAttachment, 0, len(c.attachments))
+	for _, a := range c.attachments {
+		out = append(out, db.DraftAttachment{Filename: a.Name, Data: a.Data})
+	}
+	return out
 }

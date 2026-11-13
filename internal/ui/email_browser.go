@@ -160,9 +160,11 @@ func writeAndOpenHTML(html, configured string) error {
 	return nil
 }
 
-// draftPreviewCSP lets the preview file load nothing: no network, no frames, no
-// scripts. Inline styles (the table styling) and data: images are allowed.
-const draftPreviewCSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+// draftPreviewCSP lets the preview file load only images: data: images (the
+// message's own, inlined) and remote http(s) images, as the recipient's client
+// may show them. No scripts, frames, fonts or other loads. Inline styles (the
+// table styling) are allowed.
+const draftPreviewCSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data: https: http:; base-uri 'none'; form-action 'none'"
 
 // previewDocument wraps the HTML part a draft would be sent with in a minimal
 // static page. The part is included verbatim; the wrapper adds only the doctype,
