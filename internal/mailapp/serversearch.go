@@ -46,6 +46,9 @@ type ServerSearchResult struct {
 	Capped  int      // matches left undownloaded by the per-folder cap
 	Errs    []string // per-folder failures; a search carries on past them
 	Skipped []searchquery.Term
+	// WindowDays is the default date window that applied (0 when none: the query
+	// had its own date or the window is off).
+	WindowDays int
 }
 
 // NothingToSearchError is returned when no part of a search can go to the
@@ -77,9 +80,12 @@ func DescribeTerms(terms []searchquery.Term) string {
 // ServerSearch searches the targets' folders on the server and stores the
 // matches missing from the cache. Failure of one folder or account is recorded
 // in the result and does not stop the others.
-func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.SessionPool, targets []SearchTarget, query string, now time.Time) (ServerSearchResult, error) {
+//
+// windowDays limits the search to mail sent in the last that many days when the
+// query has no date of its own (see WithServerWindow); 0 means no limit.
+func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.SessionPool, targets []SearchTarget, query string, now time.Time, windowDays int) (ServerSearchResult, error) {
 	var res ServerSearchResult
-	parsed, err := expandRelated(database, searchquery.Parse(query, now))
+	parsed, err := expandRelated(database, ServerQuery(query, now, windowDays))
 	if err != nil {
 		return res, err
 	}
@@ -88,6 +94,7 @@ func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.Ses
 		return res, &NothingToSearchError{Skipped: skipped}
 	}
 	res.Skipped = skipped
+	res.WindowDays = appliedWindow(query, now, windowDays)
 	for _, t := range targets {
 		boxes, err := database.ListMailboxes(t.Account.ID)
 		if err != nil {
@@ -168,6 +175,41 @@ func expandRelated(database *db.DB, q searchquery.Query) (searchquery.Query, err
 	return out, nil
 }
 
+// ServerQuery parses a search the way the server search runs it: with the
+// default date window added.
+func ServerQuery(query string, now time.Time, windowDays int) searchquery.Query {
+	return WithServerWindow(searchquery.Parse(query, now), now, windowDays)
+}
+
+// WithServerWindow adds "after:<windowDays>d" to q so a server search stays quick
+// on a big mailbox and has something the server can run for has:attachment. It
+// leaves q alone when windowDays is 0 or the query already has a date term
+// (after:, before: or on:), so an explicit date always wins. The window only
+// limits what the server is asked for: the local search that follows still shows
+// older mail that is already cached.
+func WithServerWindow(q searchquery.Query, now time.Time, windowDays int) searchquery.Query {
+	if windowDays <= 0 {
+		return q
+	}
+	for _, t := range q.Terms() {
+		if t.Field == searchquery.Date {
+			return q
+		}
+	}
+	window := searchquery.Parse(fmt.Sprintf("after:%dd", windowDays), now)
+	out := searchquery.Query{Problems: q.Problems}
+	out.Clauses = append(append(out.Clauses, q.Clauses...), window.Clauses...)
+	return out
+}
+
+// appliedWindow is windowDays when ServerQuery added the window to query, else 0.
+func appliedWindow(query string, now time.Time, windowDays int) int {
+	if len(ServerQuery(query, now, windowDays).Clauses) == len(searchquery.Parse(query, now).Clauses) {
+		return 0
+	}
+	return windowDays
+}
+
 // SearchableMailboxes drops folders that cannot be searched or that hold only
 // local state (Drafts are kept locally, not synced as mail).
 func SearchableMailboxes(boxes []db.Mailbox) []db.Mailbox {
@@ -229,6 +271,9 @@ func (r ServerSearchResult) Summary() (text string, failed bool) {
 	text = fmt.Sprintf("server search: %d match%s in %d folder%s", r.Found, pluralForm(r.Found, "", "es"), r.Folders, pluralForm(r.Folders, "", "s"))
 	if r.Fetched > 0 {
 		text += fmt.Sprintf(", %d new downloaded", r.Fetched)
+	}
+	if r.WindowDays > 0 {
+		text += fmt.Sprintf(" (last %d days)", r.WindowDays)
 	}
 	if r.Capped > 0 {
 		text += fmt.Sprintf(", %d more not downloaded (narrow the search)", r.Capped)

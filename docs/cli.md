@@ -150,9 +150,11 @@ one, by name or ID), downloads matches the cache lacks, newest first, up to 50 p
 folder, and then runs the cached search, so `has:attachment` and tags still apply.
 The server report is in the JSON `server` object (`folders`, `found`, `fetched`,
 `not_downloaded`, `errors`, `checked_locally`) and, in text mode, one line on
-standard error. A search with nothing the server can answer on its own, such as
-`has:attachment`, is refused with exit status 2 rather than downloading a whole
-folder.
+standard error. Unless the query has its own `after:`, `before:` or `on:`, only
+the last `server_search_window_days` days (default 365, `config.toml`) are asked
+of the server; the text report says so. With the window turned off (`0`), a
+search with nothing the server can answer on its own, such as `has:attachment`,
+is refused with exit status 2 rather than downloading a whole folder.
 
 `related:cache:123` selects the conversation of cached message 123 (reply headers,
 all folders of its account); with `--server` it also downloads conversation

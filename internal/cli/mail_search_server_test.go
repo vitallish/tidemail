@@ -57,6 +57,7 @@ func startCLIServer(t *testing.T, raws []string) (accountID, inboxID int64) {
 
 	cfg := config.DefaultConfig()
 	cfg.Accounts = []config.AccountConfig{acfg}
+	cfg.Display.ServerSearchWindowDays = 0 // the fixture's mail is old; tests of the window set their own
 	if err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -260,5 +261,59 @@ func TestRelatedSearchFindsTheConversationFromTheServer(t *testing.T) {
 	// A message that is not cached cannot be followed.
 	if code, _, raw := runSearch(t, "related:cache:9999", "--server", "--json"); code != 1 || !strings.Contains(raw, "not in the cache") {
 		t.Fatalf("unknown message: code=%d %s", code, raw)
+	}
+}
+
+func TestSearchServerDefaultWindowLimitsWhatIsAskedOfTheServer(t *testing.T) {
+	serverSearchCLIFixture(t) // mail dated March 2026
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Display.ServerSearchWindowDays = 30
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	code, env, raw := runSearch(t, "from:ann", "--server", "--json")
+	if code != 0 || env.Data.Server == nil || env.Data.Server.Found != 0 {
+		t.Fatalf("a 30-day window should find nothing from March 2026: code=%d %s", code, raw)
+	}
+	code, env, raw = runSearch(t, "from:ann after:2026-01-01", "--server", "--json")
+	if code != 0 || env.Data.Server == nil || env.Data.Server.Found != 2 {
+		t.Fatalf("an explicit date must override the window: code=%d %s", code, raw)
+	}
+}
+
+func TestRelatedServerSearchHonoursTheWindowToo(t *testing.T) {
+	_, inbox := startCLIServer(t, []string{
+		"From: Ann <ann@example.com>\r\nSubject: Budget\r\nDate: Mon, 02 Mar 2026 09:00:00 +0000\r\nMessage-ID: <root@t>\r\n\r\nx\r\n",
+		"From: Bob <bob@example.com>\r\nSubject: Re: Budget\r\nDate: Tue, 03 Mar 2026 09:00:00 +0000\r\nMessage-ID: <reply@t>\r\nIn-Reply-To: <root@t>\r\nReferences: <root@t>\r\n\r\nx\r\n",
+	})
+	database, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.UpsertMessage(db.Message{MailboxID: inbox, UID: 2, Subject: "Re: Budget", MessageID: "<reply@t>", InReplyTo: "<root@t>", References: "<root@t>", Date: time.Date(2026, 3, 3, 9, 0, 0, 0, time.UTC)}); err != nil {
+		t.Fatal(err)
+	}
+	replyID, err := database.MessageIDByUID(inbox, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	database.Close()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Display.ServerSearchWindowDays = 30
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	query := fmt.Sprintf("related:cache:%d", replyID)
+	if code, env, raw := runSearch(t, query, "--server", "--json"); code != 0 || env.Data.Server == nil || env.Data.Server.Fetched != 0 {
+		t.Fatalf("outside a 30-day window nothing should be fetched: code=%d %s", code, raw)
+	}
+	if code, env, raw := runSearch(t, query+" after:2026-01-01", "--server", "--json"); code != 0 || env.Data.Server == nil || env.Data.Server.Fetched != 1 {
+		t.Fatalf("an explicit date should reach the root: code=%d %s", code, raw)
 	}
 }

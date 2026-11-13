@@ -217,7 +217,9 @@ box and `tidemail messages search "related:cache:123"`), so you can add to it
 the server, and `Esc` to leave. Only the reply headers (`Message-ID`,
 `In-Reply-To`, `References`) decide what is related; two messages that merely share
 a subject are not. Messages TideMail has not downloaded appear after `Ctrl+G` (one
-round: if a downloaded message references yet more, press it again).
+round: if a downloaded message references yet more, press it again). Like any
+server search it only reaches back the server search window (365 days by default,
+see below); add `after:2015-01-01` to the search to look further back.
 
 ### Searching the server
 
@@ -234,14 +236,23 @@ the mail server as well:
   (`from:`, `after:`) to reach the rest.
 - The normal search then runs again over the larger cache, so the results, order,
   tags and `has:attachment` work as for any search.
+- Unless the search has its own `after:`, `before:` or `on:`, the server is only
+  asked for mail from the last 365 days (`after:365d` is added for you, and the
+  status line says "last 365 days"). That keeps searches on big mailboxes quick,
+  and it is what lets a search with only `has:attachment` run: the server gets a
+  date to search on, and the attachment test is done on what comes back. Change
+  the number in **Settings → Editor → Server search window (days)**
+  (`server_search_window_days` in `config.toml`); `0` removes the limit, in which
+  case a search with nothing but `has:attachment` or a tag is refused instead of
+  downloading a whole folder. Type your own `after:` (`after:2015-01-01`) to look
+  further back for one search. Mail already downloaded is searched whatever its age.
 
 What the server can search is words, `subject:`, `from:`, `to:`, `cc:`, `body:`,
 dates (whole days, by the message's `Date` header), `is:unread`, `is:read`,
 `is:starred`, `OR` and `-`. Tags and `has:attachment` are never sent: IMAP has no
 attachment test and tags are local to TideMail. They still work in a server
-search as long as something else narrows it (`from:ann has:attachment`); a search
-with nothing but them (`has:attachment`) is refused instead of downloading a whole
-folder. The server may match words differently from TideMail (some match any part
+search as long as something else narrows it (`from:ann has:attachment`). The
+server may match words differently from TideMail (some match any part
 of a word, some only whole words), so a few downloaded messages may not appear in
 the local results.
 

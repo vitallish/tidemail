@@ -82,6 +82,7 @@ func newServerSearchFixture(t *testing.T) *serverSearchFixture {
 	}
 	cfg := config.DefaultConfig()
 	cfg.Accounts = []config.AccountConfig{acfg}
+	cfg.Display.ServerSearchWindowDays = 0 // the fixture's mail is old; tests of the window set their own
 	m := NewModel(database, cfg, "test", false)
 	t.Cleanup(m.sessions.Close)
 	m.accounts = []db.Account{{ID: accountID, Name: "Work"}}
@@ -249,5 +250,25 @@ func TestServerSearchKeyWorksWhileTypingAndAfterEnter(t *testing.T) {
 		if cmd == nil || !strings.Contains(next.(Model).statusMsg, "searching the server") {
 			t.Errorf("editing=%v: ctrl+g did nothing (status %q)", editing, next.(Model).statusMsg)
 		}
+	}
+}
+
+func TestServerSearchDefaultWindowAppliesUnlessTheQueryHasADate(t *testing.T) {
+	f := newServerSearchFixture(t)
+	f.model.cfg.Display.ServerSearchWindowDays = 30
+	// The fixture's mail is from March 2026, so a 30-day window finds none of it...
+	if _, done := f.search(t, "from:ann"); done.Found != 0 {
+		t.Errorf("windowed search found %d, want 0 outside the window", done.Found)
+	}
+	// ...a date typed in the query replaces the window...
+	if _, done := f.search(t, "from:ann after:2026-01-01"); done.Found != 2 {
+		t.Errorf("explicit date found %d, want 2", done.Found)
+	}
+	// ...and a window makes a bare has:attachment runnable (it is no longer refused).
+	m := f.model
+	m.searchQuery = "has:attachment"
+	next, _ := m.startServerSearch()
+	if got := next.(Model).statusMsg; !strings.Contains(got, "searching the server") {
+		t.Errorf("bare has:attachment with a window: status %q", got)
 	}
 }

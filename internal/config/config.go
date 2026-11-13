@@ -217,14 +217,17 @@ type DisplayConfig struct {
 	ComposeSpell            bool   `toml:"compose_spell"`        // offline spell check in compose (off by default)
 	ComposeSpellLang        string `toml:"compose_spell_lang"`   // spell check language code; empty means English
 	// Interactive CLI only; scripted commands ignore these.
-	CLIQuitAfterSend bool               `toml:"cli_quit_after_send"` // leave `tidemail cli` after a successful send or draft
-	CLISkipReview    bool               `toml:"cli_skip_review"`     // skip the wizard's review step when undo or a draft makes it safe
-	CLISignature     bool               `toml:"cli_signature"`       // wizard default for the account signature
-	SendMaxAttempts  int                `toml:"send_max_attempts"`   // total tries, including the first
-	SendDelaySeconds int                `toml:"send_delay_seconds"`  // undo grace period; 0 = send immediately
-	Images           string             `toml:"images"`
-	VT52             RetroTerminalTweak `toml:"vt52"`
-	VT100            RetroTerminalTweak `toml:"vt100"`
+	CLIQuitAfterSend bool `toml:"cli_quit_after_send"` // leave `tidemail cli` after a successful send or draft
+	CLISkipReview    bool `toml:"cli_skip_review"`     // skip the wizard's review step when undo or a draft makes it safe
+	CLISignature     bool `toml:"cli_signature"`       // wizard default for the account signature
+	SendMaxAttempts  int  `toml:"send_max_attempts"`   // total tries, including the first
+	// ServerSearchWindowDays limits a server search (and related-message lookup)
+	// to mail from the last N days unless the query has its own date; 0 = no limit.
+	ServerSearchWindowDays int                `toml:"server_search_window_days"`
+	SendDelaySeconds       int                `toml:"send_delay_seconds"` // undo grace period; 0 = send immediately
+	Images                 string             `toml:"images"`
+	VT52                   RetroTerminalTweak `toml:"vt52"`
+	VT100                  RetroTerminalTweak `toml:"vt100"`
 	// TagStyle is how classification and IMAP tags look in message rows and headers: "pills"
 	// (default), "glyph-pills", "compact", "plain", or "tag-icons".
 	TagStyle string `toml:"tag_style"`
@@ -623,6 +626,7 @@ func DefaultConfig() Config {
 			Notifications:           true,
 			SendDelaySeconds:        5,
 			SendMaxAttempts:         3,
+			ServerSearchWindowDays:  DefaultServerSearchWindowDays,
 			CLISignature:            true,
 		},
 		Updates: UpdatesConfig{
@@ -667,6 +671,7 @@ func Load() (Config, error) {
 		cfg.Updates.CheckIntervalHours = DefaultConfig().Updates.CheckIntervalHours
 	}
 	cfg.Display.SendMaxAttempts = NormalizeSendMaxAttempts(cfg.Display.SendMaxAttempts)
+	cfg.Display.ServerSearchWindowDays = NormalizeServerSearchWindowDays(cfg.Display.ServerSearchWindowDays)
 	cfg.Display.Density = NormalizeDisplayDensity(cfg.Display.Density)
 	cfg.Display.PaneCorners = NormalizePaneCorners(cfg.Display.PaneCorners)
 	idsChanged := ensureAccountIDs(&cfg)
@@ -883,6 +888,19 @@ func TemplatesDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(filepath.Dir(cfgPath), "templates"), nil
+}
+
+// DefaultServerSearchWindowDays is how far back a server search looks unless
+// the query says otherwise. It keeps searches on large mailboxes quick and makes
+// has:attachment searchable (the server needs some criterion it can run).
+const DefaultServerSearchWindowDays = 365
+
+// NormalizeServerSearchWindowDays keeps a window of 0 (no limit) or more days.
+func NormalizeServerSearchWindowDays(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 // NormalizeSendMaxAttempts bounds automatic delivery attempts. One disables retries.
