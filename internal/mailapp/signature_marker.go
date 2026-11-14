@@ -30,7 +30,11 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft, opts ...Compos
 	if o.replyTo == "" {
 		o.replyTo = draft.InReplyTo
 	}
-	body, html, err := composeBody(draft.BodyText, account.Signature, o, images)
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return smtp.OutgoingMessage{}, err
+	}
+	body, html, err := composeBody(draft.BodyText, account.Signature, sigHTML, o, images)
 	if err != nil {
 		return smtp.OutgoingMessage{}, err
 	}
@@ -57,8 +61,12 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft, opts ...Compos
 // then shows them as broken; sending refuses them instead. err is for a body
 // that cannot be converted at all, such as two signature markers.
 func ComposeHTML(account config.AccountConfig, body string, attachments []db.DraftAttachment, opts ...ComposeOption) (html string, problems []string, err error) {
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return "", nil, err
+	}
 	images := inlineimg.NewResolver(inlineimg.ModePreview, imageSources(attachments))
-	_, html, err = composeBody(body, account.Signature, applyOptions(opts), images)
+	_, html, err = composeBody(body, account.Signature, sigHTML, applyOptions(opts), images)
 	return html, images.Problems(), err
 }
 
@@ -115,7 +123,7 @@ func replaceLine(body string, spot markerSpot, replacement string) string {
 	return body[:spot.start] + replacement + body[end:]
 }
 
-func composeBody(body, signature string, opts composeOptions, images *inlineimg.Resolver) (string, string, error) {
+func composeBody(body, signature, signatureHTML string, opts composeOptions, images *inlineimg.Resolver) (string, string, error) {
 	var html string
 	const (
 		sigMany  = "keep only one ⁂ signature marker, or delete all markers to send unsigned"
@@ -160,7 +168,7 @@ func composeBody(body, signature string, opts composeOptions, images *inlineimg.
 			if marker == nil {
 				return "", "", fmt.Errorf("put ⁂ in its own paragraph outside quotes, lists, and code blocks (add blank lines), or delete it")
 			}
-			doc.ReplaceChild(doc, marker, &signatureBlock{signature: sigText})
+			doc.ReplaceChild(doc, marker, &signatureBlock{signature: sigText, html: signatureHTML})
 		}
 		if hasQuote {
 			marker := markerParagraph(doc, source, quoteSpot, QuoteMarker)
@@ -213,6 +221,7 @@ var signatureBlockKind = ast.NewNodeKind("ComposeSignature")
 type signatureBlock struct {
 	ast.BaseBlock
 	signature string
+	html      string // from the account's HTML signature file; replaces the text-derived HTML
 }
 
 func (n *signatureBlock) Kind() ast.NodeKind            { return signatureBlockKind }
@@ -223,7 +232,12 @@ type signatureRenderer struct{}
 func (signatureRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(signatureBlockKind, func(w util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering {
-			_, err := w.WriteString(smtp.SignatureHTML(node.(*signatureBlock).signature))
+			block := node.(*signatureBlock)
+			if block.html != "" {
+				_, err := w.WriteString(block.html)
+				return ast.WalkSkipChildren, err
+			}
+			_, err := w.WriteString(smtp.SignatureHTML(block.signature))
 			return ast.WalkSkipChildren, err
 		}
 		return ast.WalkContinue, nil
