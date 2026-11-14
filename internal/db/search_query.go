@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"strings"
+	"unicode"
 
 	"github.com/allisonhere/tidemail/internal/searchquery"
 )
@@ -21,13 +22,67 @@ type compiledSearch struct {
 
 func (c compiledSearch) empty() bool { return c.match == "" && len(c.where) == 0 }
 
-// ftsColumns maps a text field to the messages_fts columns it searches.
-var ftsColumns = map[searchquery.Field]string{
-	searchquery.Subject: "subject",
-	searchquery.From:    "from_addr",
-	searchquery.To:      "to_addr",
-	searchquery.CC:      "cc_addr",
-	searchquery.Body:    "body_text",
+// ftsColumns maps a text field to the messages_fts columns it searches. to:
+// covers Cc as well, so to:work@example.com finds mail sent to a shared inbox
+// whichever header carried the address (upstream a24f5b1, #113); cc: is Cc alone.
+var ftsColumns = map[searchquery.Field][]string{
+	searchquery.Subject: {"subject"},
+	searchquery.From:    {"from_addr"},
+	searchquery.To:      {"to_addr", "cc_addr"},
+	searchquery.CC:      {"cc_addr"},
+	searchquery.Body:    {"body_text"},
+}
+
+// completeAddress reports a value shaped like a whole address (name@host.tld).
+func completeAddress(v string) bool {
+	_, host, ok := strings.Cut(v, "@")
+	return ok && strings.Contains(host, ".") && !strings.HasSuffix(host, ".")
+}
+
+// exactAddress reports a positive from:/to:/cc: term holding a whole address.
+// It is matched as a whole address, not as a prefix of a longer one:
+// to:work@example.com must not also find work@example.company or
+// work@example.com.au (upstream a24f5b1, dda08c6).
+func exactAddress(t searchquery.Term) bool {
+	switch t.Field {
+	case searchquery.From, searchquery.To, searchquery.CC:
+		return completeAddress(t.Value)
+	}
+	return false
+}
+
+// hasIndexable reports whether the tokenizer would index anything in v. A term
+// like "to:@" has nothing to match and is left out rather than matching
+// everything or raising an FTS syntax error.
+func hasIndexable(v string) bool {
+	return strings.ContainsFunc(v, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) })
+}
+
+// addressSeparators are the characters that delimit one address from the next
+// (or from its display name) in a stored header value.
+var addressSeparators = []string{"<", ">", ",", ";", `"`, "(", ")", "\t", "\n", "\r"}
+
+// exactAddressWhere restricts a complete-address term to rows where that
+// address appears as a whole address in one of the term's columns. FTS phrase
+// matching alone also matches longer addresses that merely start with it.
+func exactAddressWhere(t searchquery.Term) (string, []any) {
+	want := " " + strings.ToLower(t.Value) + " "
+	var exprs []string
+	var args []any
+	for _, col := range ftsColumns[t.Field] {
+		norm := "lower(messages." + col + ")"
+		for _, sep := range addressSeparators {
+			switch sep {
+			case "\t", "\n", "\r":
+				norm = "replace(" + norm + ", char(" + map[string]string{"\t": "9", "\n": "10", "\r": "13"}[sep] + "), ' ')"
+			default:
+				norm = "replace(" + norm + ", '" + sep + "', ' ')"
+			}
+		}
+		exprs = append(exprs, "instr(' ' || "+norm+" || ' ', ?) > 0")
+		args = append(args, want)
+	}
+	return "(" + strings.Join(exprs, " OR ") + ")", args
 }
 
 // related maps a Related term's value to the row IDs it selects (see
@@ -39,7 +94,15 @@ func compileSearch(q searchquery.Query, related map[string][]int64) compiledSear
 	var match []string
 	for ci, clause := range q.Clauses {
 		if len(clause) == 1 && clause[0].Field.IsText() && !clause[0].Negate {
+			if !hasIndexable(clause[0].Value) {
+				continue
+			}
 			match = append(match, ftsExpr(clause[0], last == [2]int{ci, 0}))
+			if exactAddress(clause[0]) {
+				expr, args := exactAddressWhere(clause[0])
+				c.where = append(c.where, expr)
+				c.args = append(c.args, args...)
+			}
 			continue
 		}
 		var parts []string
@@ -79,13 +142,17 @@ func lastPrefixable(q searchquery.Query) [2]int {
 // matches nothing and results vanish mid-word.
 func ftsExpr(t searchquery.Term, prefix bool) string {
 	expr := `"` + strings.ReplaceAll(t.Value, `"`, `""`) + `"`
-	if prefix {
+	if prefix && !exactAddress(t) {
 		expr += "*"
 	}
-	if col, ok := ftsColumns[t.Field]; ok {
-		return col + " : (" + expr + ")"
+	switch cols := ftsColumns[t.Field]; len(cols) {
+	case 0:
+		return expr
+	case 1:
+		return cols[0] + " : (" + expr + ")"
+	default:
+		return "{" + strings.Join(cols, " ") + "} : (" + expr + ")"
 	}
-	return expr
 }
 
 // termSQL is the condition for one term, or "" if it has none.
@@ -94,8 +161,16 @@ func termSQL(t searchquery.Term, prefix bool, related map[string][]int64) (strin
 	var args []any
 	switch {
 	case t.Field.IsText():
+		if !hasIndexable(t.Value) {
+			return "", nil
+		}
 		expr = "messages.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"
 		args = []any{ftsExpr(t, prefix)}
+		if exactAddress(t) {
+			exact, exactArgs := exactAddressWhere(t)
+			expr = "(" + expr + " AND " + exact + ")"
+			args = append(args, exactArgs...)
+		}
 	case t.Field == searchquery.Date:
 		var conds []string
 		if !t.Start.IsZero() {

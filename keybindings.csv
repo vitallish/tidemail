@@ -1,6 +1,8 @@
 GoField,Keys,HelpDisplay,Description,Context
 Up,"k,up",k/↑,up (Focus line on: move highlight; off: scroll one row or previous LINKS entry; first exits),global
 Down,"j,down",j/↓,down (Focus line on: move highlight; off: scroll one row; another Down at bottom enters LINKS; no wrapping),global
+PageUp,"pgup,K",pgup/shift+k,"page up (message list and content; in the sidebar shift+k keeps reordering folders)",message list+content
+PageDown,"pgdown,J",pgdn/shift+j,"page down (message list and content; at the last row it pages in older mail like down)",message list+content
 Left,"h,left",h/←,move left,global
 Right,"l,right",l/→,move right,global
 NextPane,"tab,]",tab/],next pane,global
@@ -26,6 +28,10 @@ PrevLink,alt+p,alt+p,previous LINKS entry (scroll into view),content
 Search,/,/,search,main
 ServerSearch,ctrl+g,ctrl+g,while searching: also search the server for mail not yet cached,main
 Related,L,L,show the highlighted message's conversation from every folder (related search),main
+SearchHistoryUp,up,↑,previous history entry; on a typed query opens history filtered by it (while typing in search),search
+SearchHistoryDown,down,↓,next history entry; on a typed query opens history filtered by it (while typing in search),search
+SearchComplete,tab,tab,complete the search from history (while typing in search),search
+SearchHistoryDelete,ctrl+d,ctrl+d,forget the highlighted history entry (while typing in search),search
 UnreadOnly,u,u,toggle unread only,main
 Compose,c,c,compose (one account starts in To; multiple accounts start in From),main
 Reply,r,r,reply,main
@@ -71,13 +77,14 @@ Delete,d,d,delete (messages: hidden at once, 6s undo window then server confirma
 SaveAccount,"ctrl+s,f2",ctrl+s,save account,account_manager
 TestAccount,"ctrl+t,f5",ctrl+t,test account,account_manager
 DiscoverServers,ctrl+l,ctrl+l,look up Custom account servers (DNS SRV, MX, HTTPS autoconfig),account_manager
-AttachFile,alt+f,alt+f,attach file,compose
+AttachFile,alt+f,alt+f,attach file (account form: browse for the HTML signature file),compose+account form
 GrammarCheck,ctrl+g,ctrl+g,AI grammar check,compose
 SpellCheck,f7,f7,offline spell check (needs Settings → Editor → Spell check),compose
 PGPSign,"alt+s,f8",alt+s,sign with PGP (needs a PGP plugin),compose
 PGPEncrypt,"alt+e,f9",alt+e,encrypt with PGP (needs a PGP plugin),compose
+LookupContacts,ctrl+t,ctrl+t,look up the typed recipient with the contacts provider plugin ([contacts] provider),compose
 RemoveAttach,ctrl+r,ctrl+r,remove attachment,compose
-CycleSender,ctrl+u,ctrl+u,change sender,compose
+CycleSender,ctrl+u,ctrl+u,cycle account or From address,compose
 Confirm,enter,enter,confirm,overlay
 Cancel,esc,esc,cancel (during grammar check: stop check and keep editing),overlay
 Space," ",space,toggle select (unavailable in Drafts),main
