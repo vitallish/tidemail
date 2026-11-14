@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/allisonhere/tidemail/internal/mailtag"
 )
@@ -170,7 +171,7 @@ func (db *DB) SearchAllMessagesPage(query string, unreadOnly bool, limit, offset
 
 func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limit, offset int) ([]Message, int, error) {
 	terms := ParseSearch(query)
-	match := ftsQuery(terms.Text)
+	match := searchMatch(terms)
 	if match == "" && len(terms.Tags) == 0 {
 		return nil, 0, nil
 	}
@@ -191,6 +192,14 @@ func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limi
 		where = append(where, "messages_fts MATCH ?")
 		args = append(args, match)
 		orderBy = "bm25(messages_fts), " + orderBy
+	}
+	// FTS phrases match a token run anywhere, so a complete address also needs
+	// an end-anchored check or to:work@example.com finds work@example.com.au.
+	for _, f := range terms.Fields {
+		if expr, exactArgs := exactAddressWhere(f); expr != "" {
+			where = append(where, expr)
+			args = append(args, exactArgs...)
+		}
 	}
 	if len(terms.Tags) > 0 {
 		expr, tagArgs := tagsWhere(terms.Tags)
@@ -268,7 +277,15 @@ func (db *DB) UpsertMessage(m Message) error {
 	if m.Starred {
 		starred = 1
 	}
-	_, err := db.Exec(`
+	// One transaction: a failure part-way must not leave the row stored with
+	// its old attachments gone, because the known-UID filter would then never
+	// refetch it.
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	_, err = tx.Exec(`
 		INSERT INTO messages
 			(mailbox_id, uid, message_id, in_reply_to, references_text, subject, from_addr, to_addr, cc_addr,
 			 reply_to, date, body_text, body_html, summary, flags, read, starred, has_attachment, headers)
@@ -297,18 +314,18 @@ func (db *DB) UpsertMessage(m Message) error {
 	}
 
 	if len(mailtag.Keywords(m.Flags)) > 0 {
-		if err := db.ApplyServerFlags(m.MailboxID, map[uint32][]string{m.UID: m.Flags}); err != nil {
+		if err := applyServerFlagsTx(tx, m.MailboxID, map[uint32][]string{m.UID: m.Flags}); err != nil {
 			return err
 		}
 	}
 
 	msgID := m.ID
 	if msgID == 0 {
-		if err := db.QueryRow(`SELECT id FROM messages WHERE mailbox_id = ? AND uid = ?`, m.MailboxID, m.UID).Scan(&msgID); err != nil {
+		if err := tx.QueryRow(`SELECT id FROM messages WHERE mailbox_id = ? AND uid = ?`, m.MailboxID, m.UID).Scan(&msgID); err != nil {
 			return err
 		}
 	}
-	if err := db.upsertMessageFTS(msgID); err != nil {
+	if err := upsertMessageFTS(tx, msgID); err != nil {
 		return err
 	}
 
@@ -317,18 +334,18 @@ func (db *DB) UpsertMessage(m Message) error {
 		// Get the message ID (works with INSERT or ON CONFLICT UPDATE)
 		if msgID != 0 {
 			// Delete old attachments and re-insert
-			if delErr := db.DeleteAttachmentsForMessage(msgID); delErr != nil {
+			if delErr := deleteAttachmentsForMessage(tx, msgID); delErr != nil {
 				return delErr
 			}
 			for _, a := range m.AttachmentData {
-				if _, err := db.SaveAttachment(msgID, a); err != nil {
+				if _, err := saveAttachment(tx, msgID, a); err != nil {
 					return err
 				}
 			}
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (db *DB) MessageDeletedLocally(mailboxID int64, uid uint32, messageID string) (bool, error) {
@@ -535,7 +552,60 @@ func scanMessagesWithContext(rows interface {
 // vanish mid-word and only reappear once the word is finished. Only the last
 // term is treated this way — earlier terms are complete words the user has
 // already moved past.
-func ftsQuery(query string) string {
+// searchMatch is the full-text MATCH expression for free words and field
+// operators, ANDed together; "" when there is nothing to match. The last thing
+// typed is matched as a prefix, so results follow the user while they type.
+func searchMatch(terms SearchTerms) string {
+	var parts []string
+	if text := ftsQueryPrefix(terms.Text, !terms.LastIsField); text != "" {
+		parts = append(parts, text)
+	}
+	for _, f := range terms.Fields {
+		if !strings.ContainsFunc(f.Value, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
+			continue // nothing the tokenizer would index, e.g. "to:@"
+		}
+		phrase := `"` + strings.ReplaceAll(f.Value, `"`, `""`) + `"`
+		if f.Prefix {
+			phrase += "*"
+		}
+		parts = append(parts, "{"+strings.Join(f.Columns, " ")+"} : "+phrase)
+	}
+	return strings.Join(parts, " AND ")
+}
+
+// addressSeparators are the characters that delimit one address from the next
+// (or from its display name) in a stored header value.
+var addressSeparators = []string{"<", ">", ",", ";", `"`, "(", ")", "\t", "\n", "\r"}
+
+// exactAddressWhere restricts a complete-address operator (to:a@b.com) to rows
+// where that address appears as a whole address in one of the columns, not as a
+// prefix of a longer one. It returns "" for terms that are not a complete
+// address or that are still being typed.
+func exactAddressWhere(f FieldTerm) (string, []any) {
+	if f.Prefix || !completeAddress(f.Value) {
+		return "", nil
+	}
+	want := " " + strings.ToLower(f.Value) + " "
+	var exprs []string
+	var args []any
+	for _, col := range f.Columns {
+		norm := "lower(messages." + col + ")"
+		for _, sep := range addressSeparators {
+			switch sep {
+			case "\t", "\n", "\r":
+				norm = "replace(" + norm + ", char(" + map[string]string{"\t": "9", "\n": "10", "\r": "13"}[sep] + "), ' ')"
+			default:
+				norm = "replace(" + norm + ", '" + sep + "', ' ')"
+			}
+		}
+		exprs = append(exprs, "instr(' ' || "+norm+" || ' ', ?) > 0")
+		args = append(args, want)
+	}
+	return "(" + strings.Join(exprs, " OR ") + ")", args
+}
+
+// ftsQueryPrefix is ftsQuery with the prefix match on the last word optional.
+func ftsQueryPrefix(query string, prefixLast bool) string {
 	parts := strings.Fields(strings.TrimSpace(query))
 	if len(parts) == 0 {
 		return ""
@@ -551,15 +621,17 @@ func ftsQuery(query string) string {
 	if len(quoted) == 0 {
 		return ""
 	}
-	quoted[len(quoted)-1] += "*"
+	if prefixLast {
+		quoted[len(quoted)-1] += "*"
+	}
 	return strings.Join(quoted, " AND ")
 }
 
-func (db *DB) upsertMessageFTS(id int64) error {
-	if _, err := db.Exec(`DELETE FROM messages_fts WHERE rowid = ?`, id); err != nil {
+func upsertMessageFTS(x execer, id int64) error {
+	if _, err := x.Exec(`DELETE FROM messages_fts WHERE rowid = ?`, id); err != nil {
 		return err
 	}
-	_, err := db.Exec(`
+	_, err := x.Exec(`
 		INSERT INTO messages_fts(rowid, subject, from_addr, to_addr, cc_addr, body_text)
 		SELECT id, subject, from_addr, to_addr, cc_addr, body_text
 		FROM messages

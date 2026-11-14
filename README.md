@@ -65,9 +65,9 @@ One inbox, 51 built-in themes in 23 families — Catppuccin, Tokyo Night, Rosé 
 - **NO config file editing, all in the GUI.**
 - **One view for every account.** Read a unified inbox or open any account,
   folder, or label from the same three-pane screen.
-- **Send from the right address.** Pick an account from the compose From row.
-  TideMail switches its SMTP settings, Drafts folder, From address, and
-  signature with it.
+- **Send from the right address.** Pick an account or an additional From address
+  from the compose From row. Additional addresses share their account's SMTP
+  settings, Drafts folder, and signature.
 - **Mail state stays in sync.** Read state, stars, archive, move, and delete use
   IMAP. Changes made in Gmail or another client return to TideMail on sync.
 - **A few seconds to change your mind.** Press `Ctrl+Z` to stop a queued send or
@@ -241,12 +241,14 @@ then reads `deleting ⠋` while the server confirms and fades into a green
 confirmation pill, or a red one if it failed. Errors show as a red pill and every other status message as a green one. See
 [alert colors](docs/themes.md#alert-colors) for the exact colors.
 
-## Compose with the right account
+## Compose with the right address
 
-Compose starts in To with one account, ready for typing. With multiple senders,
-it starts in From, which serves as an account picker.
-TideMail uses the chosen account for SMTP, drafts, the From address, and its
-signature. Replies, forwards, and reopened drafts use the same picker.
+Compose starts in To with one sending address, ready for typing. With multiple
+accounts or additional addresses, it starts in From, which serves as a sender
+picker. Additional addresses use their account's SMTP login, drafts, and
+signature. Replies select a matching address from the original To or Cc header;
+reopened drafts keep their selected address. Edit an account to add
+comma-separated **Email Alias**.
 
 A standalone `⁂` in the compose body marks where the selected account's signature
 will be added when sending, before quoted text by default. Move it to change the
@@ -278,6 +280,7 @@ local SQLite cache for speed and search, then reconciles it with the server on
 sync. By default an account uses IMAP IDLE, so mail lands as the server
 announces it (`sync_minutes = 0`); interval polling stays available for servers
 that need it, and `-1` keeps an account manual-only.
+If a push account's server lacks IDLE, TideMail reports it and checks every five minutes.
 
 Drafts live under the selected sender account. Sent messages use that account's
 SMTP settings and are filed in its server-side Sent folder; Gmail's own SMTP
@@ -457,12 +460,14 @@ read-only queries are covered in [queries](docs/plugins/queries.md) and
 [examples/plugins/analytics](examples/plugins/analytics/). The
 [PGP plugin](https://github.com/allisonhere/tidemail-plugins/tree/main/plugins/pgp)
 shows the `message_raw` and `message_compose` permissions.
+A plugin with the `contacts_read` permission can serve as an external address book: name it under `[contacts] provider` and press `Ctrl+T` in a recipient field.
 
 ## Keys worth learning
 
 | Key | Action |
 |---|---|
 | `j` / `k` | Move down or up |
+| `PgDn` / `PgUp`, `Shift+J` / `Shift+K` | Page down or up in the message list and reading pane |
 | `Tab` / `Shift+Tab` | Move between panes or compose fields |
 | `Up` / `Down` (compose headers) | Move between From, To, Cc, Bcc, and Subject |
 | `Enter` | Expand/collapse a conversation parent; open a child, single message, draft or picker; immediately sync a folder |
@@ -565,6 +570,7 @@ smtp_port = 587
 smtp_tls = true
 user = "mira@example.com"
 from = "Mira Chen <mira@example.com>"  # optional, but a name alone is not an address
+aliases = "Work <mira@work.example>, mira@another.example" # additional From addresses
 signature = """
 Mira
 Sent with TideMail"""
@@ -575,8 +581,15 @@ The signature is a multi-line box in the account form, so `Enter` gives you a
 new line and there is no escape to remember; editing the file by hand works too,
 and a TOML multi-line string is easier to read than `\n` escapes.
 
+For a formatted signature, set **HTML Signature** in the account form (or
+`signature_html_file = "~/signature.html"`) to an `.html` file. Its contents are
+the signature in the HTML part of your mail; the text signature above stays as
+the plain-text part. Press `Alt+F` on that row to browse for the file. Only
+HTML files without scripts, frames or forms are accepted.
+
 The order of the `[[account]]` blocks is the order accounts appear everywhere:
-the sidebar, the account list, and the `Ctrl+U` sender picker in compose.
+the sidebar, the account list, and the `Ctrl+U` sender picker in compose; each
+account's additional addresses follow its default From address.
 Reorder them here, or with `Shift+J` and `Shift+K` in **Accounts**.
 
 Config lives at `~/.config/tidemail/config.toml`. TideMail puts its SQLite cache

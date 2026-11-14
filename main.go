@@ -188,6 +188,9 @@ func run() (code int, restartExec string) {
 			code = 1
 		}
 	}()
+	// A failed flush of a pending send or action must not look like a clean
+	// exit to a script or wrapper.
+	exitCode := 0
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", config.RedactSecrets(err.Error(), cfg))
@@ -202,6 +205,7 @@ func run() (code int, restartExec string) {
 			quitIndicator = startShutdownIndicator()
 		}
 		if err := um.FlushPendingDestructiveActions(); err != nil {
+			exitCode = 1
 			if quitIndicator != nil {
 				quitIndicator.Stop()
 				quitIndicator = nil
@@ -209,6 +213,7 @@ func run() (code int, restartExec string) {
 			fmt.Fprintln(os.Stderr, "pending message action failed:", config.RedactSecrets(err.Error(), cfg))
 		}
 		if err := um.FlushPendingSends(); err != nil {
+			exitCode = 1
 			if quitIndicator != nil {
 				quitIndicator.Stop()
 				quitIndicator = nil
@@ -216,7 +221,7 @@ func run() (code int, restartExec string) {
 			fmt.Fprintln(os.Stderr, "pending send failed:", config.RedactSecrets(err.Error(), cfg))
 		}
 	}
-	return 0, restartExec
+	return exitCode, restartExec
 }
 
 func formatConfigLoadError(path string, err error, cfg config.Config) string {
