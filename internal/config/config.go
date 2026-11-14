@@ -25,6 +25,7 @@ type Config struct {
 	DefaultAccountID string `toml:"default_account"`
 
 	Display  DisplayConfig   `toml:"display"`
+	Contacts ContactsConfig  `toml:"contacts"`
 	Feed     FeedConfig      `toml:"feed"`
 	Updates  UpdatesConfig   `toml:"updates"`
 	AI       AIConfig        `toml:"ai"`
@@ -39,6 +40,14 @@ type Config struct {
 	// AttachFile = ["ctrl+o"]. Only the names the UI lists as overridable are
 	// accepted (see internal/ui/key_overrides.go); anything else is reported.
 	Keys map[string][]string `toml:"keys,omitempty"`
+}
+
+// ContactsConfig chooses where recipient lookups beyond TideMail's own contacts
+// come from.
+type ContactsConfig struct {
+	// Provider is the ID of an installed plugin that declares the
+	// contacts_read permission. Empty means no external lookup.
+	Provider string `toml:"provider,omitempty"`
 }
 
 // PluginSettings is one plugin's user settings.
@@ -373,6 +382,8 @@ type AccountConfig struct {
 	User       string `toml:"user"`
 	Password   string `toml:"password"`
 	From       string `toml:"from"`
+	// Aliases are additional sending identities on this account's SMTP connection.
+	Aliases string `toml:"aliases,omitempty"`
 	// SyncMinutes selects how the account refreshes in the background:
 	//
 	//	< 0  manual only — no polling and no push connection
@@ -386,6 +397,9 @@ type AccountConfig struct {
 	// The account form accepts literal \n escapes for multi-line signatures;
 	// TOML multi-line strings work too when editing the file directly.
 	Signature string `toml:"signature"`
+	// SignatureHTMLFile is an optional .html file sent as the signature in the
+	// HTML part of outgoing mail. Signature stays the plain-text part.
+	SignatureHTMLFile string `toml:"signature_html_file,omitempty"`
 
 	// OAuth2 — if RefreshToken is set, OAuth2 is used instead of password.
 	// ClientID and ClientSecret are auto-filled from the app-level [oauth] config at load time.
