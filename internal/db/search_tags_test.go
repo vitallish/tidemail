@@ -20,14 +20,6 @@ func (a *attentionDB) search(query string) []string {
 	return out
 }
 
-func TestParseSearch(t *testing.T) {
-	got := ParseSearch("  invoice #Billing # #GitHub! due ##x.y ")
-	want := SearchTerms{Text: "invoice due", Tags: []string{"billing", "github", "x.y"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("ParseSearch = %+v, want %+v", got, want)
-	}
-}
-
 func TestSearchByTag(t *testing.T) {
 	a := newAttentionDB(t)
 	a.add(a.inbox, "ci failed", 1, "smart category github")

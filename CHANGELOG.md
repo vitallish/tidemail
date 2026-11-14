@@ -37,6 +37,19 @@ All notable changes to TideMail are documented in this file.
   (`compose_preview_server = true`, or **Settings → Editor → Live preview
   server**) it is served from a loopback-only local server and updates as you
   type, with no reload. See "Previewing a draft in the browser" in the guide.
+- Search operators: `subject:`, `from:`, `to:`, `cc:`, `body:`, `after:`/`before:`/`on:`
+  (a date or `7d`, `2w`, `3m`, `1y`), `has:attachment`, `is:unread`/`is:read`/
+  `is:starred`, `OR`, `-` to exclude, and quoted phrases that keep word order.
+  Plain words behave as before. The `tidemail messages search` command takes
+  the same operators.
+- `Ctrl+G` during a search also searches the mail server and downloads matches
+  not yet cached (50 per folder at most), then shows them in the usual results.
+  Tags and `has:attachment` stay local, so they work when combined with another
+  term. `tidemail messages search "..." --server [--account NAME]` does the same
+  from the command line; agents need the new `messages.search_server` capability.
+  A server search only asks for the last 365 days unless the query has its own
+  date (Settings → Editor → Server search window, `server_search_window_days`;
+  0 = no limit), which also lets `has:attachment` alone run.
 - Import a whole folder of contact files: in the contact import picker, the
   first row reads every `.vcf` file in the folder you are in (a vdirsyncer or
   Nextcloud address book is one folder of `.vcf` files). One unreadable file
