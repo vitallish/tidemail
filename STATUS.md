@@ -8,6 +8,15 @@ Current release: **v1.9.0**.
 
 ## Working
 
+- **HTML signature file**: an account can point at an `.html` file used as the
+  signature in the HTML part (text signature stays the plain part), with a
+  file-browser key (`Alt+F`) in the account form. The file is vetted (HTML only,
+  no scripts, frames or forms) when chosen and again at send.
+
+- **Additional sending addresses**: configure multiple From addresses on one
+  account as a comma-separated list, select one in compose, and retain it in
+  drafts and queued retries.
+
 - **Expandable conversations, milestone 1**: derived visible rows, sorting-aware
   parents, independent session expansion, muted sender/subject tree connectors,
   individual-email previews, and existing keyboard/mouse navigation. Ordinary
@@ -59,6 +68,7 @@ Current release: **v1.9.0**.
   connection per account — deliberately outside the pool, since IDLE monopolizes a
   connection and would otherwise serialize every other operation behind it.
   `sync_minutes = 0` selects push; a positive value polls on that interval.
+  Servers without IDLE fall back to five-minute polling for push accounts.
 - **Cache correctness**: UIDVALIDITY is tracked per mailbox and invalidates the local
   cache when a server renumbers (`internal/db/reconcile.go`). Tombstones keep deleted
   mail from resurrecting through date-granular re-fetches.
