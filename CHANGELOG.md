@@ -44,6 +44,9 @@ All notable changes to TideMail are documented in this file.
 - Inline images were blank inside tmux: the Kitty graphics escapes were sent
   raw and tmux dropped them. They are now wrapped in tmux's DCS passthrough
   (needs `allow-passthrough on`).
+- Bulleted and numbered lists lost their markers in the styled reader (`First item`
+  instead of `• First item`, `1One` instead of `1. One`): the glamour theme blanked
+  the item and enumeration prefixes. Present since v1.1.1.
 - The recent-searches list is correct again after you clear the search box (it
   no longer shows a leftover filtered subset), closes when deleting its last
   matching entry, and clicking an entry highlights it instead of selecting a
