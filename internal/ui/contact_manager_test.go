@@ -167,6 +167,32 @@ func TestContactManagerBulkDelete(t *testing.T) {
 	}
 }
 
+func TestContactManagerMarksStayWithContactsAfterReload(t *testing.T) {
+	d := newContactTestDB(t)
+	for _, name := range []string{"Bob", "Carol", "Zed"} {
+		if _, err := d.AddContact(strings.ToLower(name)+"@example.com", name, "manual"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cm := NewContactManager(d)
+	cm, _, _ = cm.Update(tea.KeyMsg{Type: tea.KeySpace}, DefaultKeys)
+	cm, _, _ = cm.Update(tea.KeyMsg{Type: tea.KeySpace}, DefaultKeys)
+	if _, err := d.AddContact("amy@example.com", "Amy", "manual"); err != nil {
+		t.Fatal(err)
+	}
+	cm.reload()
+	marked := cm.targetContacts()
+	if len(marked) != 2 || marked[0].Addr != "bob@example.com" || marked[1].Addr != "carol@example.com" {
+		t.Fatalf("marks moved after reload: %+v", marked)
+	}
+	cm, _, _ = cm.Update(rune1('d'), DefaultKeys)
+	cm, _, _ = cm.Update(rune1('y'), DefaultKeys)
+	remaining, err := d.ListContacts()
+	if err != nil || len(remaining) != 2 || remaining[0].Addr != "amy@example.com" || remaining[1].Addr != "zed@example.com" {
+		t.Fatalf("deleted wrong contacts: %+v, %v", remaining, err)
+	}
+}
+
 func TestContactManagerPickerAddsSeenAddresses(t *testing.T) {
 	d := newContactTestDB(t)
 	accountID, _ := d.AddAccount("", "Acct", "")
@@ -301,5 +327,116 @@ func TestContactManagerComposeMarkedContacts(t *testing.T) {
 	}
 	if len(m.contactManager.marked) != 0 {
 		t.Fatalf("expected marks to be cleared after composing, got %v", m.contactManager.marked)
+	}
+}
+
+func entryNames(cm ContactManager) []string {
+	var names []string
+	for _, e := range cm.filePicker.entries {
+		names = append(names, e.name)
+	}
+	return names
+}
+
+func hasName(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Hidden files and folders (a vdirsyncer store lives in ~/.contacts) can be
+// shown with the same "." key the attachment picker uses.
+func TestContactImportPickerDotTogglesHiddenFiles(t *testing.T) {
+	d := newContactTestDB(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(home, ".contacts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cm := NewContactManager(d)
+	cm, _, _ = cm.Update(rune1('i'), DefaultKeys)
+	if hasName(entryNames(cm), ".contacts") {
+		t.Fatal("hidden folder listed before pressing .")
+	}
+	cm, _, _ = cm.Update(rune1('.'), DefaultKeys)
+	if !hasName(entryNames(cm), ".contacts") {
+		t.Fatalf("hidden folder not listed after pressing .: %v", entryNames(cm))
+	}
+	cm, _, _ = cm.Update(rune1('.'), DefaultKeys)
+	if hasName(entryNames(cm), ".contacts") {
+		t.Fatal("a second . should hide it again")
+	}
+}
+
+// Import offers a folder row first, and it reads every .vcf file there.
+func TestContactImportPickerImportsAWholeFolder(t *testing.T) {
+	d := newContactTestDB(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, "book")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	card := func(fn, email string) string {
+		s := "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:" + fn + "\r\n"
+		if email != "" {
+			s += "EMAIL:" + email + "\r\n"
+		}
+		return s + "END:VCARD\r\n"
+	}
+	for name, body := range map[string]string{
+		"a.vcf": card("Ann", "ann@example.com"), "b.vcf": card("Bob", "bob@example.com"), "c.vcf": card("Cy", ""),
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cm := NewContactManager(d)
+	cm, _, _ = cm.Update(rune1('i'), DefaultKeys)
+	if len(cm.filePicker.entries) == 0 || cm.filePicker.entries[0].name != importFolderRow {
+		t.Fatalf("import picker should start with the folder row, got %v", entryNames(cm))
+	}
+	cm, _, _ = cm.Update(rune1('b'), DefaultKeys) // jump to the "book" folder
+	cm, _, _ = cm.Update(tea.KeyMsg{Type: tea.KeyEnter}, DefaultKeys)
+	if cm.filePicker.currentDir != dir {
+		t.Fatalf("did not open the folder, in %q", cm.filePicker.currentDir)
+	}
+	cm, _, _ = cm.Update(tea.KeyMsg{Type: tea.KeyEnter}, DefaultKeys) // first row: import this folder
+
+	addrs, _ := d.ContactAddresses()
+	if len(addrs) != 2 {
+		t.Fatalf("imported %v, want ann and bob", addrs)
+	}
+	for _, want := range []string{"imported 2 contacts from 3 files", "skipped 1 cards with no email address"} {
+		if !strings.Contains(cm.statusMsg, want) {
+			t.Fatalf("status %q missing %q", cm.statusMsg, want)
+		}
+	}
+	if cm.isErr {
+		t.Fatal("a partly successful import should not be an error")
+	}
+}
+
+func TestImportSummaryWording(t *testing.T) {
+	msg, isErr := importSummary(db.VCardImport{Added: 3}, 0, 0, "")
+	if msg != "imported 3 contacts" || isErr {
+		t.Fatalf("plain import: %q err=%v", msg, isErr)
+	}
+	msg, isErr = importSummary(db.VCardImport{NoEmail: 2}, 0, 0, "")
+	if !isErr || !strings.Contains(msg, "skipped 2 cards with no email address") {
+		t.Fatalf("nothing saved should be an error that says why: %q err=%v", msg, isErr)
+	}
+	msg, _ = importSummary(db.VCardImport{Added: 1}, 4, 1, "bad.vcf: boom")
+	if !strings.Contains(msg, "from 4 files") || !strings.Contains(msg, "1 files failed (bad.vcf: boom)") {
+		t.Fatalf("folder summary: %q", msg)
 	}
 }

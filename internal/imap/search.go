@@ -73,7 +73,11 @@ func termCriteria(t searchquery.Term) (imap.SearchCriteria, bool) {
 	case searchquery.From:
 		c.Header = []imap.SearchCriteriaHeaderField{{Key: "From", Value: t.Value}}
 	case searchquery.To:
-		c.Header = []imap.SearchCriteriaHeaderField{{Key: "To", Value: t.Value}}
+		// to: also covers Cc, as in the local search (upstream a24f5b1, #113).
+		c.Or = [][2]imap.SearchCriteria{{
+			{Header: []imap.SearchCriteriaHeaderField{{Key: "To", Value: t.Value}}},
+			{Header: []imap.SearchCriteriaHeaderField{{Key: "Cc", Value: t.Value}}},
+		}}
 	case searchquery.CC:
 		c.Header = []imap.SearchCriteriaHeaderField{{Key: "Cc", Value: t.Value}}
 	case searchquery.Date:

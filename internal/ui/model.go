@@ -200,9 +200,15 @@ type Model struct {
 	searchQuery      string
 	searchMode       bool
 	searchEditing    bool
-	showUnreadOnly   bool
-	starredFirst     bool
-	selectedMessages map[int64]bool
+	// Search history (search_history.go): the entries shown under an empty or
+	// Up/Down-opened search box, the highlighted one (-1 = none), and whether a
+	// typed query has opened the list.
+	searchHistory       []string
+	searchHistoryCursor int
+	searchHistoryOpen   bool
+	showUnreadOnly      bool
+	starredFirst        bool
+	selectedMessages    map[int64]bool
 	// heldReadID is a message marked read on open that keeps its unread
 	// position (Unread first) or stays listed (Unread only) until the reader
 	// loses focus or shows another message. See releaseHeldRead.
@@ -360,6 +366,9 @@ type Model struct {
 	pillFadeFrom       alertPill
 	pillFadeStart      time.Time
 	pillFadeGeneration uint64
+	// statusGeneration counts setStatus calls so a clear timer scheduled for an
+	// earlier status cannot erase a newer one.
+	statusGeneration uint64
 
 	// browserReopen is the message whose browser export blocked remote images;
 	// pressing the open-in-browser key on it again reopens with images loaded.
@@ -391,7 +400,10 @@ type Model struct {
 
 	// idleWatchers holds the per-account IMAP IDLE push watchers (keyed by
 	// account ID); see startIdleWatchers. The map is shared across Model copies.
-	idleWatchers map[int64]idleWatcherEntry
+	idleWatchers        map[int64]idleWatcherEntry
+	syncTimerGeneration map[int64]uint64
+	// lastResumeTick is the wall-clock time of the previous resume check.
+	lastResumeTick time.Time
 
 	firstLoad              bool
 	pendingSelectMailboxID int64
@@ -469,7 +481,7 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 	addSpellNames(accountSpellEntries(cfg))
 
 	si := textinput.New()
-	si.Placeholder = "search messages... (#tag for tags)"
+	si.Placeholder = "search messages... (#tag, to:, from:)"
 	si.CharLimit = 100
 
 	ci := textinput.New()
@@ -523,6 +535,7 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 		olderExhausted:         make(map[int64]bool),
 		lastFolderRefresh:      make(map[int64]time.Time),
 		idleWatchers:           make(map[int64]idleWatcherEntry),
+		syncTimerGeneration:    make(map[int64]uint64),
 		collapsedAccounts:      map[int64]bool{},
 		collapsedSections:      map[string]bool{},
 		firstLoad:              true,
@@ -560,7 +573,7 @@ func (m Model) Init() tea.Cmd {
 	// The spinner tick loop is started lazily by ensureSpinner when a loading
 	// state begins — not here. Kicking it at startup would re-render the idle TUI
 	// ~10×/sec forever (the spinner self-reschedules on every tick).
-	cmds := []tea.Cmd{m.loadAccountsCmd()}
+	cmds := []tea.Cmd{m.loadAccountsCmd(), resumeTickCmd()}
 	if cmd := m.ensureSpinner(); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
@@ -610,7 +623,11 @@ func (m Model) handleUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.clearReaderMouseSelection()
 	case tea.KeyMsg:
-		if event.String() != "ctrl+c" {
+		// ctrl+c and y copy the drag selection, so they must see it. Like ctrl+c,
+		// y leaves the highlight in place after copying.
+		copiesSelection := event.String() == "ctrl+c" ||
+			(event.String() == "y" && m.focused == paneContent && m.contentMessageID != 0)
+		if !copiesSelection {
 			m.clearReaderMouseSelection()
 		}
 	}
@@ -733,6 +750,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSupportNudge()
 
 	case StatusClearMsg:
+		if msg.Generation != 0 && msg.Generation != m.statusGeneration {
+			return m, nil
+		}
 		m.compose.clearRoutedStatus()
 		m.statusMsg = ""
 		m.statusErr = false
@@ -1336,7 +1356,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case IdleEventMsg:
 		// Ignore events from a watcher that has since been replaced or stopped —
 		// re-arming a wait on it would leak a goroutine per stale event.
-		if msg.Stopped || m.idleWatchers[msg.AccountID].watcher != msg.Watcher {
+		entry, current := m.idleWatchers[msg.AccountID]
+		if !current || entry.watcher != msg.Watcher || entry.unsupported {
+			return m, nil
+		}
+		if msg.Stopped {
+			entry.unsupported = true
+			m.idleWatchers[msg.AccountID] = entry
+			if entry.cfg.SyncMinutes == 0 {
+				m.setStatus("server lacks IMAP IDLE; checking "+entry.cfg.Name+" every 5 minutes", false)
+				return m, tea.Batch(m.scheduleNextSync(msg.AccountID), m.clearStatusCmd())
+			}
 			return m, nil
 		}
 		// Re-arm the wait first, then sync the inbox the server nudged us about.
@@ -1347,8 +1377,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncMailboxCmd(msg.MailboxID, false),
 		)
 
+	case resumeTickMsg:
+		return m.handleResumeTick(msg)
+
 	case AutoSyncMsg:
 		var cmds []tea.Cmd
+		if msg.Generation != 0 && msg.Generation != m.syncTimerGeneration[msg.AccountID] {
+			return m, nil
+		}
 		// A timer that was already pending when the account was switched to
 		// manual-only can still fire once; it must not fetch.
 		if !m.syncsAutomatically(msg.AccountID) {
@@ -1579,12 +1615,18 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.readAnimationRunning || msg.Generation != m.readAnimationGeneration {
 			return m, nil
 		}
+		var expired tea.Cmd
+		if n := m.expireStaleReads(time.Now()); n > 0 {
+			m.invalidateComposePanes()
+			m.setStatus("a read/unread change didn't finish; try it again", true)
+			expired = m.clearStatusCmd()
+		}
 		if len(m.pendingReads) == 0 && !m.deleteFeedbackActive() {
 			m.readAnimationRunning = false
-			return m, nil
+			return m, expired
 		}
 		m.readAnimationFrame = (m.readAnimationFrame + 1) % len(readAnimationFrames)
-		return m, readAnimationTick(m.readAnimationGeneration)
+		return m, tea.Batch(expired, readAnimationTick(m.readAnimationGeneration))
 	case readRemoteCompletedMsg:
 		cmd := m.finishReadChanges(msg)
 		return m, cmd
@@ -1829,6 +1871,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OutgoingProtectedMsg:
 		return m.handleOutgoingProtected(msg)
 
+	case ContactsFoundMsg:
+		return m.handleContactsFound(msg)
+
 	case CommitSendMsg:
 		m.invalidateComposePanes()
 		return m, m.commitPendingSend(msg.ID)
@@ -1993,8 +2038,28 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case keyMatches(msg, m.keys.Cancel):
 			return m.exitSearchMode()
 		case keyMatches(msg, m.keys.Confirm):
-			m.searchEditing = false
-			m.searchInput.Blur()
+			// A highlighted history entry is run; otherwise the typed query is kept.
+			if entry, ok := m.highlightedSearch(); ok {
+				next, cmd := m.handleSearchCharacter(entry)
+				nm := next.(Model)
+				nm, recordCmd := nm.commitSearch()
+				return nm, tea.Batch(cmd, recordCmd)
+			}
+			return m.commitSearch()
+		// Arrow keys only: k and j are ordinary text in the search box.
+		case msg.Type == tea.KeyUp:
+			m.moveSearchHistory(-1)
+			return m, nil
+		case msg.Type == tea.KeyDown:
+			m.moveSearchHistory(1)
+			return m, nil
+		case msg.Type == tea.KeyTab:
+			if entry, ok := m.completeSearch(); ok {
+				return m.handleSearchCharacter(entry)
+			}
+			return m, nil
+		case msg.String() == "ctrl+d":
+			m.deleteHighlightedSearch()
 			return m, nil
 		case keyMatches(msg, m.keys.ServerSearch):
 			return m.startServerSearch()
@@ -2109,6 +2174,7 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.searchEditing = true
 			m.searchInput.SetValue(m.searchQuery)
 			m.searchInput.Focus()
+			m.beginSearchEditing()
 			return m, nil
 		}
 		// Enter persistent search mode.
@@ -2116,6 +2182,7 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchEditing = true
 		m.searchInput.SetValue(m.searchQuery)
 		m.searchInput.Focus()
+		m.beginSearchEditing()
 		return m, nil
 
 	case keyMatches(msg, m.keys.Command):
@@ -2264,6 +2331,12 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Down):
 		return m.handleDown()
 
+	case keyMatches(msg, m.keys.PageUp):
+		return m.handlePage(-1)
+
+	case keyMatches(msg, m.keys.PageDown):
+		return m.handlePage(1)
+
 	case keyMatches(msg, m.keys.VisualSelect):
 		if m.focused == paneContent && m.contentMessageID != 0 {
 			m.startContentSelection()
@@ -2383,19 +2456,26 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.hasSelection() {
 				cmd := m.setSelectedMessagesReadCmd(msgs)
+				if cmd == nil {
+					cmd = m.readStillSavingNotice(msgs)
+				}
 				m.clearSelection()
 				return m, cmd
 			}
 			thread := m.currentParentThread()
 			if m.currentConversationCollapsed() {
 				if m.rowReadPending(thread.Representative, *thread) {
-					return m, nil
+					return m, m.readStillSavingNotice(nil)
 				}
 				read := thread.UnreadCount > 0
 				return m, m.acceptReadChanges(thread.Messages, &read, read)
 			}
 			msg2 := msgs[0]
-			return m, m.setMessageReadCmd(msg2, !msg2.Read, !msg2.Read)
+			cmd := m.setMessageReadCmd(msg2, !msg2.Read, !msg2.Read)
+			if cmd == nil {
+				cmd = m.readStillSavingNotice(msgs[:1])
+			}
+			return m, cmd
 		}
 		return m, nil
 
@@ -2603,7 +2683,9 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				return m, saveAttachmentsCmd(m.db, m.contentAttachments)
 			}
-			m.openSaveAttachPicker(filepath.Join(home, "Downloads"))
+			if err := m.openSaveAttachPicker(filepath.Join(home, "Downloads")); err != nil {
+				return m, saveAttachmentsCmd(m.db, m.contentAttachments)
+			}
 			m.overlay = overlaySaveAttach
 			return m, nil
 		}
@@ -2791,21 +2873,23 @@ func (m Model) focusPane(next pane) (tea.Model, tea.Cmd) {
 // click calls it with the clicked row's absolute index, jumping directly
 // instead of stepping through every row in between.
 func (m Model) selectSidebarRow(idx int) (tea.Model, tea.Cmd) {
+	var focusCmd tea.Cmd
 	if m.focused != paneAccounts {
-		next, _ := m.focusPane(paneAccounts)
+		next, cmd := m.focusPane(paneAccounts)
 		m = next.(Model)
+		focusCmd = cmd
 	}
 	if idx < 0 || idx >= len(m.sidebarRows) || idx == m.sidebarCursor {
-		return m, nil
+		return m, focusCmd
 	}
 	m.cancelFolderSettle()
 	m.sidebarCursor = idx
 	m.clampSidebarOffset()
 	if m.searchActive() {
-		return m, nil
+		return m, focusCmd
 	}
 	if cmd := m.virtualViewCmd(); cmd != nil {
-		return m, cmd
+		return m, tea.Batch(focusCmd, cmd)
 	}
 	if selected := m.selectedMailbox(); selected != nil {
 		cmd := m.loadMailboxMessagesCmd(selected.ID)
@@ -2813,10 +2897,10 @@ func (m Model) selectSidebarRow(idx int) (tea.Model, tea.Cmd) {
 			cmd = tea.Batch(cmd, m.loadDraftsCmd(selected.ID))
 		}
 		// Fill the folder from the server too, once the cursor settles.
-		return m, tea.Batch(cmd, m.scheduleFolderSettle())
+		return m, tea.Batch(focusCmd, cmd, m.scheduleFolderSettle())
 	}
 	m.clearMessages()
-	return m, nil
+	return m, focusCmd
 }
 
 // selectMessageRow jumps the message-list cursor directly to idx and runs
@@ -2828,16 +2912,18 @@ func (m Model) selectSidebarRow(idx int) (tea.Model, tea.Cmd) {
 // absolute index, jumping directly instead of stepping through every row in
 // between.
 func (m Model) selectMessageRow(idx int) (tea.Model, tea.Cmd) {
+	var focusCmd tea.Cmd
 	if m.focused != paneMessages {
-		next, _ := m.focusPane(paneMessages)
+		next, cmd := m.focusPane(paneMessages)
 		m = next.(Model)
+		focusCmd = cmd
 	}
 	count := m.activeMessageRowCount()
 	if m.selectedDraftsMailbox() {
 		count = len(m.drafts)
 	}
 	if idx < 0 || idx >= count || idx == m.messageCursor {
-		return m, nil
+		return m, focusCmd
 	}
 	m.messageCursor = idx
 	visible := max(1, m.articleRowsVisible())
@@ -2848,14 +2934,14 @@ func (m Model) selectMessageRow(idx int) (tea.Model, tea.Cmd) {
 	}
 	if m.selectedDraftsMailbox() {
 		m.setViewportForCurrentRow()
-		return m, nil
+		return m, focusCmd
 	}
 	if msg2 := m.currentRowMessage(); msg2 != nil {
 		m.setViewportForCurrentRow()
 		cmd := m.focusedMessageChangedCmd(*msg2)
-		return m, cmd
+		return m, tea.Batch(focusCmd, cmd)
 	}
-	return m, nil
+	return m, focusCmd
 }
 
 func (m Model) handleUp() (tea.Model, tea.Cmd) {
@@ -2907,6 +2993,35 @@ func (m Model) handleDown() (tea.Model, tea.Cmd) {
 		} else {
 			m.scrollContentWithoutFocus(1)
 		}
+	}
+	return m, nil
+}
+
+// handlePage moves a screenful up (dir < 0) or down in the message list or
+// the content pane. The sidebar keeps Shift+J/K for reordering folders and has
+// no paging.
+func (m Model) handlePage(dir int) (tea.Model, tea.Cmd) {
+	switch m.focused {
+	case paneMessages:
+		count := m.activeMessageRowCount()
+		if m.selectedDraftsMailbox() {
+			count = len(m.drafts)
+		}
+		if count == 0 {
+			return m, nil
+		}
+		step := max(1, m.articleRowsVisible()-1)
+		idx := clamp(m.messageCursor+dir*step, 0, count-1)
+		if idx == m.messageCursor {
+			if dir > 0 {
+				// Already on the last row: same as Down, which pages in older mail.
+				return m.handleDown()
+			}
+			return m, nil
+		}
+		return m.selectMessageRow(idx)
+	case paneContent:
+		m.pageContent(dir)
 	}
 	return m, nil
 }
@@ -3067,16 +3182,16 @@ func (m Model) handleMouseRightClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if idx, ok := m.sidebarRowAt(y); ok {
 			model, cmd = m.selectSidebarRow(idx)
 		} else {
-			model, _ = m.focusPane(paneAccounts)
+			model, cmd = m.focusPane(paneAccounts)
 		}
 	case paneMessages:
 		if idx, ok := m.messageRowAt(y); ok {
 			model, cmd = m.selectMessageRow(idx)
 		} else {
-			model, _ = m.focusPane(paneMessages)
+			model, cmd = m.focusPane(paneMessages)
 		}
 	default:
-		model, _ = m.focusPane(paneContent)
+		model, cmd = m.focusPane(paneContent)
 	}
 	nm := model.(Model)
 	nm.lastClickAt = time.Time{} // a right-click never starts a double-click
@@ -3150,7 +3265,11 @@ func (m Model) handleMessagesClick(y int) (tea.Model, tea.Cmd) {
 		nm.searchEditing = true
 		nm.searchInput.SetValue(nm.searchQuery)
 		nm.searchInput.Focus()
+		nm.beginSearchEditing()
 		return nm, cmd
+	}
+	if m.searchHistoryVisible() {
+		return m.handleSearchHistoryClick(y)
 	}
 	idx, ok := m.messageRowAt(y)
 	if !ok {
@@ -3170,13 +3289,15 @@ func (m Model) handleMessagesClick(y int) (tea.Model, tea.Cmd) {
 // can establish selection; body clicks merely position the reader.
 func (m Model) handleContentClick(x, y, paneTop int) (tea.Model, tea.Cmd) {
 	m.clearContentLinkSelection()
+	var focusCmd tea.Cmd
 	interiorTop := paneTop + 1 + m.paneHeaderHeight()
 	if y < interiorTop {
 		return m.focusPane(paneContent)
 	}
 	if m.focused != paneContent {
-		next, _ := m.focusPane(paneContent)
+		next, cmd := m.focusPane(paneContent)
 		m = next.(Model)
+		focusCmd = cmd
 	}
 	line := m.viewport.YOffset + (y - interiorTop)
 	if line >= 0 && line < m.contentLineCount && y < m.mainHeight()-1 {
@@ -3186,7 +3307,7 @@ func (m Model) handleContentClick(x, y, paneTop int) (tea.Model, tea.Cmd) {
 			m.selectContentLinkAt(line)
 		}
 	}
-	return m, nil
+	return m, focusCmd
 }
 
 func (m Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -3600,6 +3721,9 @@ func (m Model) updateSettings(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.overlay = overlayNone
 			m.clearMessages()
 			cmds := []tea.Cmd{m.loadAccountsCmd(), omarchyCmd, m.termColorsCmd(m.styles.Theme.Fg, m.styles.Theme.Bg)}
+			if m.searchActive() && m.searchQuery != "" {
+				cmds = append(cmds, m.searchAllMessagesCmd(m.searchQuery))
+			}
 			// A view just hidden can't stay open; fall back to the Unified
 			// Inbox, always the first sidebar row.
 			if prevKind, _ := m.currentSidebarSelection(); (prevKind == rowKindNeedsYou && !m.cfg.Display.ShowNeedsYou) || (prevKind == rowKindWaiting && !m.cfg.Display.ShowWaiting) {
@@ -3721,6 +3845,9 @@ func (m Model) handleCompose(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.sizeCompose()
 	searching := (m.compose.focusedField == composeFieldBody && m.compose.bodyInput.ed.SearchActive()) ||
 		(m.compose.tmplOpen && m.compose.tmplEditing && m.compose.tmplEd.ed.SearchActive())
+	if km, ok := msg.(tea.KeyMsg); ok && !m.compose.busy && keyMatches(km, m.keys.LookupContacts) && m.compose.focusedRecipientInput() != nil {
+		return m.lookupContacts()
+	}
 	// Intercept grammar check key before compose gets it
 	if km, ok := msg.(tea.KeyMsg); ok && !m.compose.busy && !searching && keyMatches(km, m.keys.GrammarCheck) {
 		// Only check the reply the user wrote, not the quoted/forwarded original.
@@ -3991,7 +4118,7 @@ func (m Model) statusBarContextHintStrip() string {
 	if m.searchMode && m.searchEditing {
 		return m.statusBarJoin(
 			m.statusBarInlineText(m.styles.StatusBar, "Search"),
-			m.styles.StatusHint.Render("type search  enter finish  ctrl+g search server  esc exit"),
+			m.styles.StatusHint.Render("type search  ↑↓ history  tab complete  enter finish  ctrl+g search server  esc exit"),
 		)
 	}
 	parts := []string{
@@ -4307,8 +4434,9 @@ func (m Model) showAvailableUpdatePrompt() bool {
 // silently ignored — logging is best-effort and must never fail a sync.
 
 func (m *Model) clearStatusCmd() tea.Cmd {
+	gen := m.statusGeneration
 	return tea.Tick(4*time.Second, func(time.Time) tea.Msg {
-		return StatusClearMsg{}
+		return StatusClearMsg{Generation: gen}
 	})
 }
 
@@ -4467,10 +4595,17 @@ func (m Model) exitSearchMode() (tea.Model, tea.Cmd) {
 	m.searchEditing = false
 	m.searchQuery = ""
 	m.searchInput.Reset()
+	m.closeSearchHistory()
 	return m, m.visibleMessagesCmd()
 }
 
 func (m Model) handleSearchCharacter(newValue string) (tea.Model, tea.Cmd) {
+	m.closeSearchHistory() // typing hands the pane back to the live results
+	if strings.TrimSpace(newValue) == "" {
+		// An empty box shows the full recent list again; it may have been
+		// narrowed to a prefix while the user had text typed.
+		m.refreshSearchHistory("")
+	}
 	m.searchInput.SetValue(newValue)
 	m.searchInput.CursorEnd()
 	m.searchQuery = strings.TrimSpace(newValue)
@@ -4706,6 +4841,7 @@ func (c *ComposeModel) clearRoutedStatus() {
 
 func (m *Model) setStatus(msg string, isErr bool) {
 	m.invalidateReaderSelectionView()
+	m.statusGeneration++
 	m.statusMsg = msg
 	m.statusErr = isErr
 	m.statusPill = !isErr
@@ -4884,11 +5020,29 @@ func deleteAccountDatabaseCmd(database *db.DB, request AccountDeletedMsg, previo
 			result.Err = fmt.Errorf("database unavailable")
 			return result
 		}
-		if err := database.DeleteAccount(request.AccountID); err != nil {
+		if err := database.DeleteAccount(request.AccountID, unambiguousLegacyAccountUser(previousCfg.Accounts, request)...); err != nil {
 			result.Err = fmt.Errorf("delete account database: %w", err)
 		}
 		return result
 	}
+}
+
+func unambiguousLegacyAccountUser(accounts []config.AccountConfig, request AccountDeletedMsg) []string {
+	for _, account := range accounts {
+		if account.ID != request.ConfigID || account.Name != request.AccountName {
+			continue
+		}
+		matches := 0
+		for _, other := range accounts {
+			if other.Name == account.Name && other.User == account.User {
+				matches++
+			}
+		}
+		if matches == 1 {
+			return []string{account.User}
+		}
+	}
+	return nil
 }
 
 // persistAccountConfigChange applies mutate to a copy of the config and writes

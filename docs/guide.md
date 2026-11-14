@@ -92,6 +92,9 @@ tidemail
 ```
 
 Press `M` to open the account manager, then add your IMAP and SMTP details.
+Deleting an account there removes its cached mail, local drafts and attachments,
+and outbox items from TideMail. Mail on the server is unaffected.
+
 Gmail, Outlook, Yahoo, and iCloud have their servers built in. For a **Custom**
 account, TideMail can look the servers up from your email address: type the
 address in the **Email / login** row at the top of the form and move on, and
@@ -115,7 +118,7 @@ tries, in order:
   shared provider database. It uses only servers TideMail can reach securely
   (IMAP over TLS, sending over TLS or STARTTLS) with a password. If the file
   says your login is not your full address, the login row takes that login and
-  your address moves to **From address**.
+  your address moves to **From**.
 
 The lookup runs in the background and only fills in the form: nothing
 connects or saves until you press `Ctrl+T` or `Ctrl+S`. DNS answers aren't
@@ -141,7 +144,7 @@ the Gmail, Outlook, Yahoo, and iCloud
 providers the **Email** row must be a full address; a **Custom** account's
 **Email / login** is whatever your host issues, which need not be an address at all
 — cPanel's `alice+example.com`, an Exchange `DOMAIN\alice`, a bare ISP login.
-When it is not an address, the **From address** row becomes required: there is
+When it is not an address, the **From** row becomes required: there is
 no address to send as otherwise, and the form says so rather than leaving the
 first send to be refused by the server.
 
@@ -170,7 +173,13 @@ accounts fetch no mail on their own, not even at launch: they refresh only when 
 Push (`0`) is the default and the best choice for servers that support IDLE,
 including Gmail. The safety poll exists because IDLE goes silent on a connection
 that wedges without dropping, so push alone can stall with nothing to show for
-it. Use `-1` if you want an account to refresh only when you press `s`.
+it. If a server does not support IDLE, TideMail reports this in the status line
+and checks that account every five minutes for the rest of the session. Use `-1`
+if you want an account to refresh only when you press `s`.
+
+After your computer wakes from suspend, TideMail notices the gap, reconnects the
+push connections, and syncs every automatic account right away, so you do not
+have to press `s`.
 
 ## Reading and organizing mail
 
@@ -187,12 +196,34 @@ unread badges update after confirmation. Failed mailboxes retain their local sta
 Press `/` to search, `u` to show unread mail, and `t` to place starred messages
 first. Search covers subject, sender, recipients, and message body across every
 account and folder, and matches as you type.
+Saving Settings refreshes the results for an open search.
+
+Limit a word to one header with an operator: `from:`, `to:`, `cc:`, or
+`subject:`. `to:work@example.com` finds mail addressed to that address in either
+To or Cc, which separates a shared inbox such as iCloud+ custom domains; `cc:`
+matches Cc alone. Put a value with spaces in quotes, as in `from:"Jo Smith"`.
+A complete address matches exactly, while a name matches as you type
+(`from:pat` finds `pat@...` and `Patricia`). Operators combine with each other,
+with words, and with `#tags`: `to:work@example.com invoice #billing`. They match
+the headers stored with cached mail, so an address that appears only in Bcc is
+not found.
+
+**Search history.** Pressing `Enter` to keep a search remembers it (the last 30,
+newest first, stored locally in TideMail's database, never sent anywhere). With
+an empty search box the message list shows your recent searches: `↓` / `↑` move
+through them and `Enter` runs the highlighted one; `↑` from the first entry goes
+back to typing. After you have typed something, `↑` or `↓` opens the list
+filtered to entries that start with your text, and `Tab` completes the box from
+the newest matching entry (or the highlighted one) so you can edit it before
+pressing `Enter`. `Ctrl+D` forgets the highlighted entry. Typing closes the list
+and shows live results again. Run **Clear search history** from the command
+palette to forget everything. Escaping out of a search does not remember it.
 
 Operators narrow a search. Words are ANDed, so `invoice due` needs both:
 
 | Type | Finds |
 |---|---|
-| `subject:invoice`, `from:ann`, `to:bob`, `cc:carol`, `body:refund` | the word in that field only (`from:ann@example.com`, or quote a name: `from:"Ann Lee"`) |
+| `subject:invoice`, `from:ann`, `to:bob`, `cc:carol`, `body:refund` | the word in that field only (`from:ann@example.com`, or quote a name: `from:"Ann Lee"`); `to:` also covers Cc |
 | `"quarterly review"` | the exact phrase, in that word order |
 | `after:2026-01-31`, `before:2026-02-15`, `on:2026-02-01` | received on or after / before / on that day (your local time) |
 | `after:7d`, `after:2w`, `after:3m`, `after:1y` | received within that long ago |
@@ -437,6 +468,8 @@ deleting, and moving messages still work. In the left pane:
 - `H` hides the selected folder (and its subfolders) from TideMail's sidebar
   only; nothing changes on the server. "Show hidden folders" in the command
   palette lists them again, marked `(hidden)`, and `H` on one unhides it.
+  After hiding or deleting the selected folder, TideMail loads the view now
+  highlighted in the sidebar.
 - `Shift+K` / `Shift+J` walk the selected folder up or down the tree one row at a
   time, and it is shown indented while it is inside a parent. Passing a sibling
   just reorders it (the order is local to TideMail). Moving onto an open folder
@@ -674,11 +707,22 @@ previous row, like `Tab` and `Shift+Tab`, except that `Up` stops at the top row.
 the recipient suggestions are open, `Up` and `Down` choose a suggestion instead. In the
 body they move the text cursor.
 
-With one account, compose starts in **To** so you can type immediately.
-With multiple accounts, it starts in **From**, which works as an account picker.
+With one sending address, compose starts in **To** so you can type immediately.
+With multiple accounts or sending addresses, it starts in **From**, which works as a sender picker.
 Focus it with `Shift+Tab` or `Up` from the To row, then press `Enter` or `Space` and
-choose the account. `Ctrl+U` cycles through the same list. TideMail uses that
-account's SMTP settings, From address, and signature.
+choose the account or one of its other From addresses. `Ctrl+U` cycles through
+the same list. An additional address uses its parent account's SMTP settings,
+Drafts folder, and signature. The selected address stays with a draft and queued
+send, including retries. If the address is removed before a retry, TideMail
+stops the send and reports that the address must be restored or the message
+edited. Reopening a draft whose address was removed shows a warning and selects
+the account default. Replies preselect a configured
+address when it appears in the original message's To or Cc header.
+
+In **Accounts → Edit → Sending identity**, enter additional From addresses in
+**Email Alias**, separated by commas. Incoming mail for these
+addresses still arrives in the account's normal Inbox.
+Your mail provider must permit sending from each additional address.
 
 A new message starts from your default account — the one marked `★ [default]`
 in **Accounts**. Set it by highlighting an account there and pressing `Space`.
@@ -727,16 +771,18 @@ the server may have taken the message before the connection went, so it is not
 a failure and TideMail will not retry it on its own. Check Sent mail before
 you retry one by hand.
 
-Every attempt takes the sending address from the account as it stands at that
-moment, not from a copy saved when the message was queued. So if a send failed
-because the account's **From address** was wrong, correcting it and pressing
-`r` is enough — the queued message does not have to be rewritten or composed
-again.
+Every attempt takes the default sending address from the account as it stands
+at that moment. A queued message explicitly sent from an additional address
+keeps it while that address remains configured. If a send failed because the
+account's default **From** was wrong, correcting it and pressing `r`
+is enough — the queued message does not have to be rewritten.
 
 Failed deliveries retry after one minute. The maximum attempt setting includes
 the first try; it defaults to `3`, and `1` disables automatic retries. An
 interrupted delivery is marked uncertain because the server may have accepted
-it. Check Sent mail before manually retrying an uncertain message.
+it. Check Sent mail before manually retrying an uncertain message. A send that
+is still running, such as a large upload, is left alone by a second TideMail or
+`tidemail outbox process` for 15 minutes before it is treated as interrupted.
 
 When replying, the quoted original is editable text inside the message body;
 there is no separate expand/collapse control in compose.
@@ -856,11 +902,25 @@ same templates; see the [command line](cli.md).
 ## Contacts
 
 Press `C` to open Contacts. Press `n` to add someone, `f` to browse addresses
-found in your mail, `i` to import a vCard, or `x` to export `contacts.vcf`.
+found in your mail, `i` to import vCards, or `x` to export `contacts.vcf`.
 Select contacts with `Space`, then press `c` to write to them.
 
+In the import picker, choose a `.vcf` file, or choose the first row, **import
+every .vcf file in this folder**, to read a whole address book at once (a
+vdirsyncer or Nextcloud folder, for example). Subfolders are not searched. Press
+`.` to show hidden files and folders such as `~/.contacts`. A card with no email
+address cannot be saved, so the import tells you how many it skipped, and a
+file that cannot be read is counted without stopping the rest.
+
 Compose suggestions show saved contacts before addresses gathered from your
-mail. vCard imports and exports include names, email addresses, phone numbers,
+mail. A name containing a comma, such as "Doe, John", is inserted in quotes so
+the recipient stays valid, and a comma inside quotes does not split the
+recipient you are typing. To search an address book TideMail does not hold (CardDAV, khard and the
+like), install a plugin that declares the `contacts_read` permission, name it
+with `provider = "<plugin id>"` under `[contacts]` in `config.toml`, then press
+`Ctrl+T` in To, Cc or Bcc. The text you typed goes to the plugin, and its
+matches join the suggestions. They are never saved, and nothing runs while you
+type. vCard imports and exports include names, email addresses, phone numbers,
 organizations, titles, and notes. Adding or importing an address you already
 saved fills in missing details but never blanks a saved name; edit the contact
 to clear it.
@@ -997,7 +1057,7 @@ signature = "Alice\nSent with TideMail"
 sync_minutes = 0  # 0 = push (IDLE), N = poll every N min, -1 = manual only
 ```
 
-`from` is the **From address** row in the account form. Give it an address —
+`from` is the **From** row in the account form. Give it an address —
 `alice@example.com` or `Alice <alice@example.com>` — or leave it blank to send
 as `user`, which works only when `user` is itself an address. A display name on
 its own is not enough: the account form refuses to save one, because SMTP has
@@ -1034,6 +1094,24 @@ signature = """
 Alice
 Sent with TideMail"""
 ```
+
+**HTML signature.** Under the signature box, **HTML Signature** takes the path to
+an `.html` file (for example `~/signature.html`; config key
+`signature_html_file`). Type or paste the path, or press `Alt+F` on that row to
+browse: `Enter` opens a folder or chooses a file, `←` goes up, `Esc` goes back.
+The file's contents replace the text signature in the HTML part of the message;
+the text signature remains the plain-text part, so keep both. A fragment is sent
+as written; for a whole HTML document only the contents of `<body>` are used.
+The file must end in `.html` or `.htm`, be under 64 KB, and contain HTML. Because
+its contents go out in every message, TideMail refuses other files (a key or a
+config file chosen by mistake, for instance) and any HTML with `<script>`,
+`<iframe>`, `<object>`, `<embed>` or `<form>`, `on…` event attributes, or
+`javascript:` links. The browser shows the reason and stays open; saving the
+account checks again. The file is read and checked again when you send, so edits
+apply immediately. If it has been moved, deleted, or no longer passes, the send
+is refused with a message rather than going out unsigned. Images must use absolute `https://` URLs;
+local paths and many embedded images do not display for recipients. PGP-encrypted
+messages are unaffected.
 
 `auth_method` is set for you: it becomes `"oauth2"` once you complete a `Ctrl+O`
 sign-in for a Gmail/Outlook account, otherwise `"password"`. The refresh token
@@ -1265,6 +1343,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `Shift+J` / `Shift+K` in Accounts | Move the highlighted account down / up the list |
 | `Ctrl+T` in the account form | Test the connection without saving |
 | `Ctrl+L` in the account form | Look up a Custom account's servers from its email domain (DNS SRV, MX, then HTTPS autoconfig) |
+| `PgDn` / `PgUp` or `Shift+J` / `Shift+K` | Page down / up in the message list and the reading pane. In the message list the cursor moves a screenful; at the last row it loads older mail like `Down`. In the reading pane the page keeps one line of overlap and, with the focus line on, moves the highlight. In Accounts, `Shift+J` / `Shift+K` still reorder instead. |
 | `s` | Sync current mailbox (Unified Inbox: syncs all inboxes) |
 | `Enter` on a conversation parent | Expand/collapse; `Right` / `l` or `Tab` opens its email in the reader |
 | `Enter` on a child or single message | Focus the reader |
@@ -1300,7 +1379,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `O` | Open the Outbox |
 | `o` or `Enter` | Open an explicitly selected LINKS entry or a visible link deliberately focused with the keyboard |
 | `Ctrl+U` | Unsubscribe from the mailing list for the open message |
-| `Ctrl+U` in compose | Cycle the sending account; focus From and press `Enter` to open the account picker |
+| `Ctrl+U` in compose | Cycle the sending account or address; focus From and press `Enter` to open the sender picker |
 | `Ctrl+N` / `Alt+N` | Select the next LINKS entry and scroll it into view |
 | `Alt+P` | Select the previous LINKS entry and scroll it into view |
 | `Alt+P` on the account form's Password row | Enter the password in a native dialog (`zenity` or `kdialog`) |

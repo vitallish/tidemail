@@ -21,9 +21,78 @@ All notable changes to TideMail are documented in this file.
   A server search only asks for the last 365 days unless the query has its own
   date (Settings → Editor → Server search window, `server_search_window_days`;
   0 = no limit), which also lets `has:attachment` alone run.
+- Import a whole folder of contact files: in the contact import picker, the
+  first row reads every `.vcf` file in the folder you are in (a vdirsyncer or
+  Nextcloud address book is one folder of `.vcf` files). One unreadable file
+  no longer stops the rest. (#125, #116)
+- Look up recipients in an external address book through a plugin. A plugin
+  that declares `contacts_read` answers `contacts.search`; name it under
+  `[contacts] provider` and press `Ctrl+T` in To, Cc or Bcc. Matches join the
+  suggestions and are never stored. (First step toward #116.)
+- Configure additional From addresses on one account, choose them in compose,
+  and keep the chosen address through drafts and queued retries, so iCloud+
+  custom domains and other aliases can be sent from (#113).
+- An account can use an `.html` file as its signature in the HTML part of sent
+  mail (**HTML Signature** in the account form, `Alt+F` to browse); the text
+  signature remains the plain-text part. Files that are not HTML, or that
+  contain scripts, frames or forms, are refused when chosen and again at send.
+- Page through the message list and the reading pane with `PgDn` / `PgUp` or
+  `Shift+J` / `Shift+K`. In the sidebar and Accounts, `Shift+J` / `Shift+K`
+  keep reordering.
+- Search can limit a word to one header with `from:`, `to:`, `cc:` and `subject:`.
+  `to:work@example.com` finds mail addressed to that address in To or Cc, which
+  separates a shared inbox such as iCloud+ custom domains (#113). Operators
+  combine with words and `#tags`.
+- Search remembers the last 30 searches you keep with `Enter`. An empty search
+  box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
+  filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
+  **Clear search history** is in the command palette.
 
 ### Fixed
 
+- The recent-searches list is correct again after you clear the search box (it
+  no longer shows a leftover filtered subset), closes when deleting its last
+  matching entry, and clicking an entry highlights it instead of selecting a
+  hidden message.
+- `y` copies a mouse-drag selection in the reader, like `ctrl+c`, instead of
+  reporting "nothing to copy".
+- Microsoft browser sign-in also listens on IPv6 loopback, so it works where
+  `localhost` resolves to `::1` first.
+- Quitting now exits with status 1 when a pending send or message action fails
+  to flush, instead of 0, so scripts can tell a failed send from a clean exit.
+- A message with a stored "plugin" classification correction no longer drops out
+  of Needs You while keeping its Needs Reply badge.
+- A status message is no longer wiped early by the clear timer of an earlier
+  one, and an error no longer flashes away.
+- A complete address in `to:`, `cc:` or `from:` now matches only that address.
+  `to:work@example.com` no longer also finds `work@example.com.au` or
+  `network-work@example.com`, as the guide already said.
+- The command palette no longer offers reply, archive, move, delete and other
+  message actions while Drafts is selected, where they acted on an unrelated
+  cached message or did nothing.
+- Opening a message's source, decoding PGP, or loading older mail no longer acts
+  on stale cached UIDs after a folder was recreated on the server; it asks you to
+  sync instead of showing the wrong message.
+- Storing a synced message is now all-or-nothing with its search entry and
+  attachments, so a failure part-way no longer leaves a message permanently
+  missing attachments.
+- A slow send, such as a large attachment, is no longer marked uncertain by
+  another TideMail instance or `tidemail outbox process` after two minutes; the
+  window is now 15 minutes.
+- Mail keeps arriving after the computer resumes from suspend. TideMail now
+  detects the wake, reconnects the push (IDLE) connections, and syncs at once,
+  instead of waiting for a manual sync. (#129)
+- Recipient suggestions for names containing a comma (such as "Doe, John") are
+  inserted in quotes, so they no longer block sending, and a comma inside a
+  quoted name no longer splits the recipient being typed.
+- Importing contacts now says how many cards it skipped because they have no
+  email address, instead of importing fewer contacts without a word. (#116)
+- The contact import picker can show hidden files and folders with `.`, like
+  the attachment picker. (#124)
+- A read or unread change that never finished no longer leaves the message
+  showing the working spinner forever and ignoring later toggles. After 45
+  seconds TideMail releases it and says so. Pressing `x` on a message that is
+  still saving now says so instead of doing nothing.
 - TideMail would not start on Windows since v1.8.0: it exited with `error
   opening database: init db: SQL logic error: out of memory (1)`. The database
   path was handed to SQLite as `file://C:/...`, so SQLite took `C:` for a host
