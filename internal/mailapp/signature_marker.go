@@ -25,7 +25,11 @@ const SignatureMarker = "⁂"
 // drafts. The draft itself is never modified, so undo/edit restores the marker.
 func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.OutgoingMessage, error) {
 	images := inlineimg.NewResolver(inlineimg.ModeSend, imageSources(draft.Attachments))
-	body, html, err := composeBody(draft.BodyText, account.Signature, images)
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return smtp.OutgoingMessage{}, err
+	}
+	body, html, err := composeBody(draft.BodyText, account.Signature, sigHTML, images)
 	if err != nil {
 		return smtp.OutgoingMessage{}, err
 	}
@@ -52,12 +56,16 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.Outgoing
 // then shows them as broken; sending refuses them instead. err is for a body
 // that cannot be converted at all, such as two signature markers.
 func ComposeHTML(account config.AccountConfig, body string, attachments []db.DraftAttachment) (html string, problems []string, err error) {
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return "", nil, err
+	}
 	images := inlineimg.NewResolver(inlineimg.ModePreview, imageSources(attachments))
-	_, html, err = composeBody(body, account.Signature, images)
+	_, html, err = composeBody(body, account.Signature, sigHTML, images)
 	return html, images.Problems(), err
 }
 
-func composeBody(body, signature string, images *inlineimg.Resolver) (string, string, error) {
+func composeBody(body, signature, signatureHTML string, images *inlineimg.Resolver) (string, string, error) {
 	var html string
 	switch strings.Count(body, SignatureMarker) {
 	case 0:
@@ -93,7 +101,7 @@ func composeBody(body, signature string, images *inlineimg.Resolver) (string, st
 			return "", "", fmt.Errorf("put ⁂ in its own paragraph outside quotes, lists, and code blocks (add blank lines), or delete it")
 		}
 		sig := strings.TrimSpace(signature)
-		doc.ReplaceChild(doc, marker, &signatureBlock{signature: sig})
+		doc.ReplaceChild(doc, marker, &signatureBlock{signature: sig, html: signatureHTML})
 		var rendered bytes.Buffer
 		if err := md.Renderer().Render(&rendered, source, doc); err != nil {
 			return "", "", err
@@ -125,6 +133,7 @@ var signatureBlockKind = ast.NewNodeKind("ComposeSignature")
 type signatureBlock struct {
 	ast.BaseBlock
 	signature string
+	html      string // from the account's HTML signature file; replaces the text-derived HTML
 }
 
 func (n *signatureBlock) Kind() ast.NodeKind            { return signatureBlockKind }
@@ -135,7 +144,12 @@ type signatureRenderer struct{}
 func (signatureRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(signatureBlockKind, func(w util.BufWriter, _ []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering {
-			_, err := w.WriteString(smtp.SignatureHTML(node.(*signatureBlock).signature))
+			block := node.(*signatureBlock)
+			if block.html != "" {
+				_, err := w.WriteString(block.html)
+				return ast.WalkSkipChildren, err
+			}
+			_, err := w.WriteString(smtp.SignatureHTML(block.signature))
 			return ast.WalkSkipChildren, err
 		}
 		return ast.WalkContinue, nil
