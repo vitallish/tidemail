@@ -278,6 +278,11 @@ func (db *DB) migrate() error {
 			value TEXT NOT NULL DEFAULT ''
 		);
 
+		CREATE TABLE IF NOT EXISTS search_history (
+			query   TEXT PRIMARY KEY COLLATE NOCASE,
+			used_at INTEGER NOT NULL
+		);
+
 		CREATE TABLE IF NOT EXISTS contacts (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			addr         TEXT    NOT NULL UNIQUE,
@@ -405,6 +410,7 @@ func (db *DB) migrate() error {
 	if err := db.migrateDraftsBCC(); err != nil {
 		return err
 	}
+	db.Exec(`ALTER TABLE drafts ADD COLUMN sender_from TEXT NOT NULL DEFAULT ''`) //nolint:errcheck
 	if err := db.migrateMessageFTS(); err != nil {
 		return err
 	}
