@@ -26,6 +26,10 @@ All notable changes to TideMail are documented in this file.
   removed. The plain-text part shows `[image: alt]` instead of the reference. File paths are
   not supported; remote `https://` images are left as links, and `data:` images are converted.
   The browser preview (`F4`) shows the same processed images and now also loads remote images.
+- `Ctrl+V` in compose pastes an image from the clipboard when the clipboard holds an image and no
+  text (also **Paste image from clipboard** in the command palette): it is attached as
+  `image-1.png` and `![](image-1.png)` is written at the cursor. Linux (Wayland through
+  `wl-paste`, X11 through `xclip`); other platforms report that it is not supported yet.
 - `F4` in compose (or **Preview draft in browser** in the command palette) opens the
   HTML part of the draft in your browser exactly as it would be sent, before you
   send it. Nothing is saved or sent, and recipients are not required. The page is
