@@ -4204,7 +4204,7 @@ func (m Model) statusBarContextHintStrip() string {
 	if m.searchMode && m.searchEditing {
 		return m.statusBarJoin(
 			m.statusBarInlineText(m.styles.StatusBar, "Search"),
-			m.styles.StatusHint.Render("type search  enter finish  ctrl+g search server  esc exit"),
+			m.styles.StatusHint.Render("type search  ↑↓ history  tab complete  enter finish  ctrl+g search server  esc exit"),
 		)
 	}
 	parts := []string{

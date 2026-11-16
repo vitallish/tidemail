@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/allisonhere/tidemail/internal/mailtag"
 	"github.com/allisonhere/tidemail/internal/searchquery"
@@ -534,8 +533,8 @@ func scanMessagesWithContext(rows interface {
 	return msgs, rows.Err()
 }
 
-func (db *DB) upsertMessageFTS(id int64) error {
-	if _, err := db.Exec(`DELETE FROM messages_fts WHERE rowid = ?`, id); err != nil {
+func upsertMessageFTS(x execer, id int64) error {
+	if _, err := x.Exec(`DELETE FROM messages_fts WHERE rowid = ?`, id); err != nil {
 		return err
 	}
 	_, err := x.Exec(`
