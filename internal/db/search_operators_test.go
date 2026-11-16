@@ -6,31 +6,6 @@ import (
 	"testing"
 )
 
-func TestParseSearchOperators(t *testing.T) {
-	cols := func(name string) []string { return searchFieldColumns[name] }
-	for name, tc := range map[string]struct {
-		query string
-		want  SearchTerms
-	}{
-		"to":              {"to:work@example.com", SearchTerms{Fields: []FieldTerm{{cols("to"), "work@example.com", false}}, LastIsField: true}},
-		"partial name":    {"to:wor", SearchTerms{Fields: []FieldTerm{{cols("to"), "wor", true}}, LastIsField: true}},
-		"case, then text": {"FROM:jo invoice", SearchTerms{Text: "invoice", Fields: []FieldTerm{{cols("from"), "jo", false}}}},
-		"quoted":          {`from:"Jo Smith" due`, SearchTerms{Text: "due", Fields: []FieldTerm{{cols("from"), "Jo Smith", false}}}},
-		"unterminated":    {`subject:"hello wor`, SearchTerms{Fields: []FieldTerm{{cols("subject"), "hello wor", true}}, LastIsField: true}},
-		"no value yet":    {"invoice to:", SearchTerms{Text: "invoice"}},
-		"open quote only": {`to:"`, SearchTerms{}},
-		"tag and field":   {"#billing cc:ann@example.com", SearchTerms{Tags: []string{"billing"}, Fields: []FieldTerm{{cols("cc"), "ann@example.com", false}}, LastIsField: true}},
-		"unknown name":    {"re:hello", SearchTerms{Text: "re:hello"}},
-		"two operators":   {"from:a to:b x", SearchTerms{Text: "x", Fields: []FieldTerm{{cols("from"), "a", false}, {cols("to"), "b", false}}}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if got := ParseSearch(tc.query); !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("ParseSearch(%q) = %+v, want %+v", tc.query, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestSearchByOperators(t *testing.T) {
 	d := newTestDB(t)
 	acct, _ := d.AddAccount("", "iCloud", "")

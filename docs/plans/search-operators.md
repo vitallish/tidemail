@@ -25,7 +25,7 @@ exclude, `"quoted phrase"`. Parentheses are NOT in the first cut.
 | Term | Meaning | Local | Server (IMAP) |
 |---|---|---|---|
 | `word` | anywhere (subject, from, to, cc, body) | FTS5 | `TEXT word` |
-| `subject:x` `from:x` `to:x` `cc:x` `body:x` | one field | FTS5 column filter | `SUBJECT` `FROM` `TO` `CC` `BODY` |
+| `subject:x` `from:x` `to:x` `cc:x` `body:x` | one field (`to:` also covers Cc, as upstream) | FTS5 column filter | `SUBJECT` `FROM` `TO` `CC` `BODY` |
 | `after:2026-01-01` `before:...` `on:...` | date | `messages.date` | `SINCE` `BEFORE` `ON` (date only, server time zone) |
 | `after:7d` `after:3m` | relative date | same | same |
 | `has:attachment` | has an attachment | `has_attachment` | post-filter after fetch (Decision 5) |

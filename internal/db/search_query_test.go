@@ -69,7 +69,8 @@ func TestSearchOperators(t *testing.T) {
 		{"body:invoice", []string{"Invoice March", "Newsletter"}},
 		{"from:ann", []string{"Invoice March"}},
 		{"from:example.com", []string{"Invoice March", "Lunch"}},
-		{"to:ann", []string{"Re: Invoice March"}},
+		// to: covers Cc as well (upstream a24f5b1, #113); cc: is Cc alone.
+		{"to:ann", []string{"Newsletter", "Re: Invoice March"}},
 		{"cc:ann", []string{"Newsletter"}},
 		{"from:ann@example.com", []string{"Invoice March"}},
 		{`from:"ann lee"`, []string{"Invoice March"}},

@@ -8,6 +8,19 @@ All notable changes to TideMail are documented in this file.
 
 ### Added
 
+- Search operators: `subject:`, `from:`, `to:`, `cc:`, `body:`, `after:`/`before:`/`on:`
+  (a date or `7d`, `2w`, `3m`, `1y`), `has:attachment`, `is:unread`/`is:read`/
+  `is:starred`, `OR`, `-` to exclude, and quoted phrases that keep word order.
+  Plain words behave as before. The `tidemail messages search` command takes
+  the same operators.
+- `Ctrl+G` during a search also searches the mail server and downloads matches
+  not yet cached (50 per folder at most), then shows them in the usual results.
+  Tags and `has:attachment` stay local, so they work when combined with another
+  term. `tidemail messages search "..." --server [--account NAME]` does the same
+  from the command line; agents need the new `messages.search_server` capability.
+  A server search only asks for the last 365 days unless the query has its own
+  date (Settings → Editor → Server search window, `server_search_window_days`;
+  0 = no limit), which also lets `has:attachment` alone run.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
@@ -43,19 +56,6 @@ All notable changes to TideMail are documented in this file.
   box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
   filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
   **Clear search history** is in the command palette.
-- Search operators: `subject:`, `from:`, `to:`, `cc:`, `body:`, `after:`/`before:`/`on:`
-  (a date or `7d`, `2w`, `3m`, `1y`), `has:attachment`, `is:unread`/`is:read`/
-  `is:starred`, `OR`, `-` to exclude, and quoted phrases that keep word order.
-  Plain words behave as before. The `tidemail messages search` command takes
-  the same operators.
-- `Ctrl+G` during a search also searches the mail server and downloads matches
-  not yet cached (50 per folder at most), then shows them in the usual results.
-  Tags and `has:attachment` stay local, so they work when combined with another
-  term. `tidemail messages search "..." --server [--account NAME]` does the same
-  from the command line; agents need the new `messages.search_server` capability.
-  A server search only asks for the last 365 days unless the query has its own
-  date (Settings → Editor → Server search window, `server_search_window_days`;
-  0 = no limit), which also lets `has:attachment` alone run.
 
 ### Fixed
 

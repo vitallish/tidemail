@@ -223,7 +223,7 @@ Operators narrow a search. Words are ANDed, so `invoice due` needs both:
 
 | Type | Finds |
 |---|---|
-| `subject:invoice`, `from:ann`, `to:bob`, `cc:carol`, `body:refund` | the word in that field only (`from:ann@example.com`, or quote a name: `from:"Ann Lee"`) |
+| `subject:invoice`, `from:ann`, `to:bob`, `cc:carol`, `body:refund` | the word in that field only (`from:ann@example.com`, or quote a name: `from:"Ann Lee"`); `to:` also covers Cc |
 | `"quarterly review"` | the exact phrase, in that word order |
 | `after:2026-01-31`, `before:2026-02-15`, `on:2026-02-01` | received on or after / before / on that day (your local time) |
 | `after:7d`, `after:2w`, `after:3m`, `after:1y` | received within that long ago |
