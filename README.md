@@ -512,6 +512,7 @@ A plugin with the `contacts_read` permission can serve as an external address bo
 | `Ctrl+U` | Unsubscribe while reading; cycle sender while composing |
 | `Alt+F` / `Ctrl+R` | Attach a file while composing; remove the last attachment |
 | `Ctrl+D` | Save attachments from the open message (starts in your downloads folder; set it in Settings → General) |
+| `w` | Open one attachment with your default program (a list when there are several) |
 | `Ctrl+E` | Show or hide full headers |
 | `Ctrl+O` | View the message source (`c` copies it) |
 | `Ctrl+B` | View the whole message in your browser (remote content blocked) |
@@ -597,6 +598,7 @@ send_delay_seconds = 5
 send_max_attempts = 3  # total attempts; 1 disables automatic retries
 compose_vim = true
 compose_word_wrap = true  # wrap compose text between words (default); false wraps at the edge
+# attachment_open_cmd = "zathura {file}"  # optional: program for the w key; default is the system opener
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]

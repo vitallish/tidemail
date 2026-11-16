@@ -1453,6 +1453,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `Alt+F` in compose | Attach a file (opens the file picker) |
 | `Ctrl+R` in compose | Remove the last attachment |
 | `Ctrl+D` | Save attachments to folder |
+| `w` | Open one attachment of the open message with your default program |
 | `Ctrl+G` | AI grammar & spell check (compose). The preview fits the screen and scrolls with `↑`/`↓`, `PgUp`/`PgDn`, and `Home`/`End`; `y` accepts, `n` or `Esc` cancels |
 | `F7` | Offline spell check (compose); needs Settings → Editor → Spell check |
 | `Alt+M` in compose | Maximize the compose panel across the full terminal; press again to restore. The application status bar is hidden; compose notifications (including autosave failures) appear in the composer footer. Each new compose, reply, forward, or reopened draft starts compact. |
@@ -1733,6 +1734,29 @@ For SMTP port 587, enable **SMTP TLS** (STARTTLS); port 465 uses implicit TLS.
 TideMail rejects plaintext OAuth configurations before connecting or refreshing
 credentials, and never sends the OAuth bearer response over an unencrypted SMTP
 connection.
+
+**Opening an attachment.** With a message open in the reader, `w` opens one of its
+attachments without saving them all: a message with one attachment opens it at
+once, several show a list (`↑`/`↓`, `Enter`, `Esc` cancels). Images embedded in the
+message body are not listed. TideMail writes a copy to a private folder under your
+temporary directory (owner-only, `tidemail-attachments-<uid>`), named like the
+attachment, and starts the program without waiting for it. Copies older than 24
+hours are deleted at startup and before each open, because a viewer may keep
+reading the file after the launcher exits. The program is the platform default
+(`xdg-open`, `open`, or the Windows file handler) unless `attachment_open_cmd` in
+`[display]` is set; it is a shell command line run with `sh -c`, `{file}` is
+replaced by the quoted path (added at the end if absent), and there is no Settings
+screen for it:
+
+```toml
+[display]
+attachment_open_cmd = "zathura {file}"
+```
+
+A custom command needs `sh`, so on Windows only the default program is used.
+Attachments inside a PGP-encrypted message are not available (see above). The
+command line has the same feature: `tidemail messages attachments ID` and
+`tidemail messages open ID --attachment N` ([CLI reference](cli.md)).
 
 Message-list focus stays visible after resizing, including after navigating on a
 very short terminal. Full-width plain-text mail reserves its left inset before

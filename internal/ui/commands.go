@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/mailapp"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -114,6 +115,7 @@ func (m Model) mainCommandItems() []commandItem {
 	items = append(items, m.needsYouCommandItems()...)
 	items = append(items, m.waitingCommandItems()...)
 	items = append(items, m.snoozeCommandItems()...)
+	items = append(items, commandItem{id: "open-attachment", label: "Open an attachment", enabled: hasContent && len(mailapp.OpenableAttachments(m.contentAttachments)) > 0})
 	items = append(items, commandItem{id: "view-source", label: "View message source", enabled: hasMessage || hasContent})
 	items = append(items, commandItem{id: "plugin-catalog", label: "Browse available plugins…", enabled: true})
 	if _, ok := m.pgpPlugin(); ok {
@@ -297,6 +299,8 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 	case "plugin-catalog":
 		cmd := m.openPluginCatalog(overlayNone)
 		return m, cmd
+	case "open-attachment":
+		return m.startOpenAttachment()
 	case "view-source":
 		if cur := m.commandMessage(); cur != nil {
 			return m.openSource(*cur)
