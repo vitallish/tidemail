@@ -25,7 +25,11 @@ const SignatureMarker = "⁂"
 // drafts. The draft itself is never modified, so undo/edit restores the marker.
 func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.OutgoingMessage, error) {
 	images := inlineimg.NewResolver(inlineimg.ModeSend, imageSources(draft.Attachments))
-	body, html, err := composeBody(draft.BodyText, account.Signature, images)
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return smtp.OutgoingMessage{}, err
+	}
+	body, html, err := composeBody(draft.BodyText, account.Signature, sigHTML, images)
 	if err != nil {
 		return smtp.OutgoingMessage{}, err
 	}
@@ -52,12 +56,16 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.Outgoing
 // then shows them as broken; sending refuses them instead. err is for a body
 // that cannot be converted at all, such as two signature markers.
 func ComposeHTML(account config.AccountConfig, body string, attachments []db.DraftAttachment) (html string, problems []string, err error) {
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return "", nil, err
+	}
 	images := inlineimg.NewResolver(inlineimg.ModePreview, imageSources(attachments))
-	_, html, err = composeBody(body, account.Signature, images)
+	_, html, err = composeBody(body, account.Signature, sigHTML, images)
 	return html, images.Problems(), err
 }
 
-func composeBody(body, signature string, images *inlineimg.Resolver) (string, string, error) {
+func composeBody(body, signature, signatureHTML string, images *inlineimg.Resolver) (string, string, error) {
 	var html string
 	switch strings.Count(body, SignatureMarker) {
 	case 0:
