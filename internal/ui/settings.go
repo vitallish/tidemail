@@ -93,6 +93,7 @@ const (
 	sfComposeVim
 	sfComposeSearchRegex
 	sfComposeWordWrap
+	sfReplyFocusBody
 	sfComposeSpell
 	sfSpellLang
 	sfSpellDictionary
@@ -364,6 +365,7 @@ type Settings struct {
 	composeVim              bool
 	composeSearchRegex      bool
 	composeWordWrap         bool
+	replyFocusBody          bool
 	composeSpell            bool
 	spellLangIdx            int
 	cliQuitAfterSend        bool
@@ -493,6 +495,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		composeVim:              cfg.Display.ComposeVim,
 		composeSearchRegex:      cfg.Display.ComposeSearchRegex,
 		composeWordWrap:         cfg.Display.ComposeWordWrap,
+		replyFocusBody:          cfg.Display.ReplyFocusBody,
 		composeSpell:            cfg.Display.ComposeSpell,
 		spellLangIdx:            spellLangIndex(cfg.Display.ComposeSpellLang),
 		cliQuitAfterSend:        cfg.Display.CLIQuitAfterSend,
@@ -593,6 +596,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.ComposeVim = s.composeVim
 	cfg.Display.ComposeSearchRegex = s.composeSearchRegex
 	cfg.Display.ComposeWordWrap = s.composeWordWrap
+	cfg.Display.ReplyFocusBody = s.replyFocusBody
 	cfg.Display.ComposeSpell = s.composeSpell
 	cfg.Display.ComposeSpellLang = spellLangs[s.spellLangIdx].id
 	cfg.Display.CLIQuitAfterSend = s.cliQuitAfterSend
@@ -855,7 +859,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		// Keep this order in lockstep with the ssGeneral case in viewSectionBody.
 		return []settingsField{sfBackToSections, sfBrowser, sfDownloadDir, sfConfirmQuit, sfNotifications, sfMouseSupport}
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfReplyFocusBody, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1644,6 +1648,15 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 			s.setFocusedField(s.prevField())
 		}
 
+	case sfReplyFocusBody:
+		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.replyFocusBody = !s.replyFocusBody
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
 	case sfComposeSearchRegex:
 		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.composeSearchRegex = !s.composeSearchRegex
@@ -2190,6 +2203,8 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addToggle("Vim keys in compose", s.composeVim, sfComposeVim)
 		b.addToggle("Wrap at word boundaries", s.composeWordWrap, sfComposeWordWrap)
 		b.addFieldHint(sfComposeWordWrap, "Wraps compose text between words instead of mid-word. Display only; your message text is not changed.")
+		b.addToggle("Reply opens in the body", s.replyFocusBody, sfReplyFocusBody)
+		b.addFieldHint(sfReplyFocusBody, "Reply and Reply All start with the caret in the message body, above the quote, instead of on the first header field. Forward still starts at To.")
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)
 		b.addFieldHint(sfComposeSearchRegex, "Shows an optional Regex toggle in compose Find. Searches stay literal until you enable it in the search bar.")
 		b.addToggle("Spell check in compose (F7)", s.composeSpell, sfComposeSpell)

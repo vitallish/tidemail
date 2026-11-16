@@ -69,6 +69,9 @@ All notable changes to TideMail are documented in this file.
   so terminals can open them with Ctrl+click. A label that wraps is linked on
   every line, and prose that only looks like a button is never linked.
   TideMail's own click handling is unchanged.
+- `reply_focus_body` in `[display]` (also **Settings → Editor → Reply opens in the
+  body**): reply and reply all open with the caret in the message body, above the
+  quote, instead of on the first header field. Off by default; forward is unchanged.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret

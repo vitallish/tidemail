@@ -728,7 +728,12 @@ message list or content pane). Reply all puts the sender (or Reply-To) in To and
 other recipients in Cc, leaving out your own addresses. Recipient names, including
 Chinese and other non-ASCII names, stay readable in replies; names containing
 commas are quoted to keep the address valid. Recipient lines too long for
-the field scroll sideways as you type or move the cursor. TideMail
+the field scroll sideways as you type or move the cursor. Replies normally open on
+the first header field; turn on **Settings → Editor → Reply opens in the body**
+(`reply_focus_body = true`) to start them with the caret in the message body, above
+the quote (in Vim mode, in Insert). It applies to reply and reply all, not forward,
+which starts at To. With several accounts, `Shift+Tab` still walks back up through
+From and the header. TideMail
 saves your work to the sending account's Drafts folder as you type. Open Drafts
 and press `Enter` to continue writing, or `d` to delete a draft. The preview pane
 shows the first 64 KB of a very large draft and notes how much is hidden.
