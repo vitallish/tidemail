@@ -211,7 +211,7 @@ not found.
 **Search history.** Pressing `Enter` to keep a search remembers it (the last 30,
 newest first, stored locally in TideMail's database, never sent anywhere). With
 an empty search box the message list shows your recent searches: `↓` / `↑` move
-through them and `Enter` runs the highlighted one; `↑` from the first entry goes
+through them (or click one to highlight it) and `Enter` runs the highlighted one; `↑` from the first entry goes
 back to typing. After you have typed something, `↑` or `↓` opens the list
 filtered to entries that start with your text, and `Tab` completes the box from
 the newest matching entry (or the highlighted one) so you can edit it before
@@ -502,6 +502,17 @@ Each delete, archive or move also writes two lines to the Logs pane: one when it
 server and one when it finishes, with how long the server work took and how long the app took to
 see the result. If a pill ever seems stuck, those two times show which side was slow.
 
+**Settings → Advanced → View Logs** shows the same pane full-screen, scrollable with
+`j`/`k` or the arrow keys. Press `c` to copy the whole log to the clipboard, or `s` to save it
+to a file — both in chronological order (oldest first), the opposite of the pane's newest-first
+display, and errors are marked with a leading `!` so they are easy to find. `s` opens the same
+folder browser attachments save to, starting in Downloads, so you can navigate to or select any
+folder; the file is `tidemail-logs-<timestamp>.txt` and never overwrites an existing one. If
+Downloads doesn't exist, it saves straight to `~/Downloads/tidemail-logs/` instead of opening the
+browser. This log is the last 100 status-bar messages from this session, not the IMAP/IDLE sync
+diagnostics TideMail keeps on disk in `fetch.log`, next to `config.toml`
+(`~/.config/tidemail/fetch.log`; Windows: `%USERPROFILE%\.config\tidemail\fetch.log`).
+
 ### Waiting on Them
 
 **Waiting on Them**, below Needs You, lists conversations where you sent the
@@ -607,6 +618,12 @@ press `i` again when prompted to reload it.
 Choose **Settings → Display → Reading → Images** (`Auto` or `Off`) and press
 `Ctrl+S` to save. The change takes effect immediately; remote images still require
 `i` to load. The setting also shows whether inline images are supported.
+
+Inside tmux, TideMail wraps its graphics escapes in tmux's passthrough, which needs
+`set -g allow-passthrough on` in `tmux.conf` (tmux 3.3+). Without it the images stay blank.
+TideMail's startup probe is not sent through passthrough, so inside tmux the terminal is
+recognised from the variables tmux inherited (for example `KITTY_WINDOW_ID`). If images stay
+blank even with passthrough on, set `TIDEMAIL_IMAGE_PROTOCOL=kitty` as described below.
 
 TideMail picks the graphics mode from your terminal's environment, and
 recognises Herdr automatically. If that finds nothing (for example inside another
@@ -875,12 +892,13 @@ to clear it.
 ## Passwords and API keys
 
 TideMail stores IMAP and SMTP passwords, AI API keys, and OAuth refresh tokens
-in the system keychain. It uses `secret-tool` on Linux and Keychain on macOS.
-When TideMail starts, it loads any blank password, API key, or refresh token
-from the keychain. Saving Settings moves loaded secrets into the keychain and
-clears them from the config file.
+in the system keychain. It uses `secret-tool` on Linux and the `security`
+command (Keychain) on macOS. When TideMail starts, it loads any blank
+password, API key, or refresh token from the keychain. Saving Settings moves
+loaded secrets into the keychain and clears them from the config file.
 
-If `secret-tool` is unavailable on Linux, TideMail writes these secrets to
+If `secret-tool` is unavailable on Linux, or `security` can't reach an
+unlocked keychain on macOS, TideMail writes these secrets to
 `~/.config/tidemail/config.toml`. Keep that file private. Windows has no
 keychain support yet, so it always stores these secrets in
 `%USERPROFILE%\.config\tidemail\config.toml`.
@@ -1035,6 +1053,10 @@ is rejected with an error. The command starts in the directory TideMail was
 launched from, so put a path in the command line (`yazi ~/Documents
 --chooser-file={chooser}`) to start elsewhere. The setting needs `sh`, so on
 Windows the built-in browser is always used.
+The compose body is Markdown. It is sent as HTML, with the text you typed as the
+plain-text part. The GitHub-flavored extensions work: pipe tables, `~~strikethrough~~`,
+bare web addresses that become links, and `- [ ]` task lists (shown as checkboxes,
+which some mail programs hide).
 
 A standalone `⁂` in the compose body marks where your signature will be inserted
 when sending. New messages, replies, forwards, and email-link compositions include
@@ -1526,7 +1548,7 @@ Unified Inbox.
 
 Mouse-driven text selection and copying in the reading pane is available with
 Focus Line either enabled or disabled. With Mouse support on, left-drag over text
-and press **Ctrl+C** to copy it, preserving displayed line breaks. Release keeps
+and press **Ctrl+C** (or `y`) to copy it, preserving displayed line breaks. Release keeps
 the highlight; another click clears it. Drag above or below the reader to
 autoscroll and extend the selection. Keyboard navigation clears the mouse
 selection. Clicking or dragging hyperlinks never opens them.
