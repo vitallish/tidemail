@@ -521,3 +521,22 @@ func TestComposeSearchRegexDefaultAndPersistence(t *testing.T) {
 		}
 	}
 }
+
+func TestReplyFocusBodySurvivesSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	if cfg.Display.ReplyFocusBody {
+		t.Fatal("reply_focus_body must default to off")
+	}
+	cfg.Display.ReplyFocusBody = true
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Display.ReplyFocusBody {
+		t.Fatal("reply_focus_body did not survive save/load")
+	}
+}

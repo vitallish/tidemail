@@ -657,7 +657,12 @@ target. Mail text drops bare carriage returns while retaining CRLF line breaks.
 Press `c` to compose a message, or `r` to reply and `Ctrl+R` to reply all (from the
 message list or content pane). Reply all puts the sender (or Reply-To) in To and the
 other recipients in Cc, leaving out your own addresses. Recipient lines too long for
-the field scroll sideways as you type or move the cursor. TideMail
+the field scroll sideways as you type or move the cursor. Replies normally open on
+the first header field; turn on **Settings → Editor → Reply opens in the body**
+(`reply_focus_body = true`) to start them with the caret in the message body, above
+the quote (in Vim mode, in Insert). It applies to reply and reply all, not forward,
+which starts at To. With several accounts, `Shift+Tab` still walks back up through
+From and the header. TideMail
 saves your work to the sending account's Drafts folder as you type. Open Drafts
 and press `Enter` to continue writing, or `d` to delete a draft. The preview pane
 shows the first 64 KB of a very large draft and notes how much is hidden.

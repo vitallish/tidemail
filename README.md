@@ -560,6 +560,7 @@ send_delay_seconds = 5
 send_max_attempts = 3  # total attempts; 1 disables automatic retries
 compose_vim = true
 compose_word_wrap = true  # wrap compose text between words (default); false wraps at the edge
+reply_focus_body = false  # true: Reply and Reply All start in the message body instead of the header
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]
