@@ -73,6 +73,10 @@ All notable changes to TideMail are documented in this file.
   compose, e.g. `yazi --chooser-file={chooser}`. TideMail suspends while it
   runs and attaches every path the picker writes to the `{chooser}` file. Unix
   only; the built-in browser stays the default.
+- A `[keys]` table in `config.toml` rebinds individual keys by name. Only
+  `AttachFile` (default `Alt+F`) is supported so far, e.g.
+  `AttachFile = ["ctrl+o"]`; the compose footer now shows the attach key and the
+  command palette follows it.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
@@ -104,10 +108,6 @@ All notable changes to TideMail are documented in this file.
   box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
   filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
   **Clear search history** is in the command palette.
-- A `[keys]` table in `config.toml` rebinds individual keys by name. Only
-  `AttachFile` (default `Alt+F`) is supported so far, e.g.
-  `AttachFile = ["ctrl+o"]`; the compose footer now shows the attach key and the
-  command palette follows it.
 
 ### Changed
 
