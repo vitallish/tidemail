@@ -569,6 +569,7 @@ compose_table_style = "none"  # inline borders for Markdown tables in sent mail:
 # compose_table_css = "border:1px solid #444;padding:6px 10px"  # cell style for "custom"
 compose_reply_marker = false    # true: replies start with a ⁑ quote marker, resolved at send time with the original's formatting (F3 views it)
 compose_preview_server = false  # F4 preview: true serves a live page from a local port (127.0.0.1) instead of a static file
+reply_focus_body = false  # true: Reply and Reply All start in the message body instead of the header
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]
