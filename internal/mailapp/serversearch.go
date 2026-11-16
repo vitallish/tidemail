@@ -85,7 +85,7 @@ func DescribeTerms(terms []searchquery.Term) string {
 // query has no date of its own (see WithServerWindow); 0 means no limit.
 func ServerSearch(ctx context.Context, database *db.DB, sessions *imapClient.SessionPool, targets []SearchTarget, query string, now time.Time, windowDays int) (ServerSearchResult, error) {
 	var res ServerSearchResult
-	parsed, err := expandRelated(database, searchquery.Parse(query, now))
+	parsed, err := expandRelated(database, ServerQuery(query, now, windowDays))
 	if err != nil {
 		return res, err
 	}
@@ -173,6 +173,52 @@ func expandRelated(database *db.DB, q searchquery.Query) (searchquery.Query, err
 		}
 	}
 	return out, nil
+}
+
+// ServerQuery parses a search the way the server search runs it: with the
+// default date window added.
+func ServerQuery(query string, now time.Time, windowDays int) searchquery.Query {
+	return WithServerWindow(searchquery.Parse(query, now), now, windowDays)
+}
+
+// WithServerWindow adds "after:<windowDays>d" to q so a server search stays quick
+// on a big mailbox and has something the server can run for has:attachment. It
+// leaves q alone when windowDays is 0 or the query already has a date term
+// (after:, before: or on:), so an explicit date always wins. The window only
+// limits what the server is asked for: the local search that follows still shows
+// older mail that is already cached.
+func WithServerWindow(q searchquery.Query, now time.Time, windowDays int) searchquery.Query {
+	if windowDays <= 0 {
+		return q
+	}
+	for _, t := range q.Terms() {
+		if t.Field == searchquery.Date {
+			return q
+		}
+	}
+	window := searchquery.Parse(fmt.Sprintf("after:%dd", windowDays), now)
+	out := searchquery.Query{Problems: q.Problems}
+	out.Clauses = append(append(out.Clauses, q.Clauses...), window.Clauses...)
+	return out
+}
+
+// WithWindowText returns query with " after:<windowDays>d" appended when the
+// server search would add the window (see WithServerWindow), and whether it did.
+// The terminal interface writes this into the search field, so the limit is
+// visible and can be edited or replaced by a date of the user's own.
+func WithWindowText(query string, now time.Time, windowDays int) (string, bool) {
+	if appliedWindow(query, now, windowDays) == 0 {
+		return query, false
+	}
+	return strings.TrimSpace(query) + fmt.Sprintf(" after:%dd", windowDays), true
+}
+
+// appliedWindow is windowDays when ServerQuery added the window to query, else 0.
+func appliedWindow(query string, now time.Time, windowDays int) int {
+	if len(ServerQuery(query, now, windowDays).Clauses) == len(searchquery.Parse(query, now).Clauses) {
+		return 0
+	}
+	return windowDays
 }
 
 // SearchableMailboxes drops folders that cannot be searched or that hold only

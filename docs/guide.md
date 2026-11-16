@@ -248,7 +248,9 @@ box and `tidemail messages search "related:cache:123"`), so you can add to it
 the server, and `Esc` to leave. Only the reply headers (`Message-ID`,
 `In-Reply-To`, `References`) decide what is related; two messages that merely share
 a subject are not. Messages TideMail has not downloaded appear after `Ctrl+G` (one
-round: if a downloaded message references yet more, press it again).
+round: if a downloaded message references yet more, press it again). Like any
+server search it only reaches back the server search window (365 days by default,
+see below); add `after:2015-01-01` to the search to look further back.
 
 ### Searching the server
 
