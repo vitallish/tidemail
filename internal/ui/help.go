@@ -95,6 +95,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{"conversations", "▸ collapsed, ▾ expanded; children have muted tree connectors; every row previews one email"},
 				{"actions", "delete, archive, move, star and Space affect only the selected email, including parents; explicit selections remain separate"},
 				{"auto", "moving down past the last message loads older mail from the server"},
+				{keys.ReaderScrollDown.Help().Key + "/" + keys.ReaderScrollUp.Help().Key, "scroll the open message one row down or up without leaving the list"},
 				{keys.Space.Help().Key, "select message and advance"},
 				{keys.SelectAll.Help().Key, "select all messages in current view"},
 				{keys.PageUp.Help().Key + "/" + keys.PageDown.Help().Key, "move up or down a screenful (at the last row, pages in older mail like down)"},

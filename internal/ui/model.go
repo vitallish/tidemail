@@ -2365,6 +2365,12 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case keyMatches(msg, m.keys.Down):
 		return m.handleDown()
 
+	case keyMatches(msg, m.keys.ReaderScrollUp):
+		return m.scrollReaderFromList(-1)
+
+	case keyMatches(msg, m.keys.ReaderScrollDown):
+		return m.scrollReaderFromList(1)
+
 	case keyMatches(msg, m.keys.PageUp):
 		return m.handlePage(-1)
 

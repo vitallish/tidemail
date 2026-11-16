@@ -70,6 +70,9 @@ All notable changes to TideMail are documented in this file.
   `{file}` for the path. Also in the command palette, and on the command line as
   `messages attachments ID` and `messages open ID --attachment N`, which an agent
   may run only with the new `attachments.open` capability.
+- `Ctrl+J` / `Ctrl+K` scroll the open message one row down or up while the message
+  list keeps focus, so a long message can be read without moving to the reader.
+  `J`/`K` still page the list.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
