@@ -246,6 +246,22 @@ func TestCommandPaletteExecuteSaveAttachSaveUsesCurrentFolder(t *testing.T) {
 	}
 }
 
+// The palette runs compose actions by sending the action's key to the
+// composer, so rebinding AttachFile has to be mirrored there.
+func TestCommandPaletteComposeAttachOpensPicker(t *testing.T) {
+	t.Cleanup(func() { setComposeFilePickerCmd("") })
+	setComposeFilePickerCmd("")
+	m := NewModel(nil, config.Config{
+		Accounts: []config.AccountConfig{{Name: "Personal", User: "me@example.com"}},
+		Display:  config.DefaultConfig().Display,
+	}, "dev", false)
+	m.compose = NewCompose(m.cfg.Accounts[0], m.cfg.Accounts, nil)
+	got, _ := m.executeCommand("compose-attach")
+	if !got.(Model).compose.picker.active {
+		t.Fatal("compose-attach from the palette must open the attach picker")
+	}
+}
+
 // In Drafts the cursor indexes m.drafts, so message actions in the palette
 // would act on an unrelated cached message (or nothing). They stay disabled.
 func TestCommandPaletteDisablesMessageActionsInDrafts(t *testing.T) {
