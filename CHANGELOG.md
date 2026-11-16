@@ -69,6 +69,11 @@ All notable changes to TideMail are documented in this file.
   so terminals can open them with Ctrl+click. A label that wraps is linked on
   every line, and prose that only looks like a button is never linked.
   TideMail's own click handling is unchanged.
+- New `compose_table_style` in `[display]` (also **Settings → Editor → Table style**)
+  adds borders and cell padding to Markdown tables in sent mail as inline styles
+  that Gmail honours:
+  `none` (default, unchanged), `basic`, or `custom` with your own CSS in
+  `compose_table_css` (config file only). See "Tables in messages" in the guide.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
@@ -100,12 +105,6 @@ All notable changes to TideMail are documented in this file.
   box lists them (`↑`/`↓`, `Enter` to run), `↑`/`↓` on typed text opens the list
   filtered by it, `Tab` completes from history and `Ctrl+D` forgets an entry.
   **Clear search history** is in the command palette.
-- Markdown pipe tables in a message are sent as real HTML tables (they used to go
-  out as literal `| a | b |` text), with column alignment. New
-  `compose_table_style` in `[display]` (also **Settings → Editor → Table style**)
-  adds borders and cell padding to them as inline styles that Gmail honours:
-  `none` (default, unchanged), `basic`, or `custom` with your own CSS in
-  `compose_table_css` (config file only). See "Tables in messages" in the guide.
 
 ### Changed
 
