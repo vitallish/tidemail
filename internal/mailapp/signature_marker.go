@@ -30,7 +30,11 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft, opts ...Compos
 	if o.replyTo == "" {
 		o.replyTo = draft.InReplyTo
 	}
-	body, html, err := composeBody(draft.BodyText, account.Signature, o, images)
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return smtp.OutgoingMessage{}, err
+	}
+	body, html, err := composeBody(draft.BodyText, account.Signature, sigHTML, o, images)
 	if err != nil {
 		return smtp.OutgoingMessage{}, err
 	}
@@ -57,8 +61,12 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft, opts ...Compos
 // then shows them as broken; sending refuses them instead. err is for a body
 // that cannot be converted at all, such as two signature markers.
 func ComposeHTML(account config.AccountConfig, body string, attachments []db.DraftAttachment, opts ...ComposeOption) (html string, problems []string, err error) {
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return "", nil, err
+	}
 	images := inlineimg.NewResolver(inlineimg.ModePreview, imageSources(attachments))
-	_, html, err = composeBody(body, account.Signature, applyOptions(opts), images)
+	_, html, err = composeBody(body, account.Signature, sigHTML, applyOptions(opts), images)
 	return html, images.Problems(), err
 }
 
@@ -115,7 +123,7 @@ func replaceLine(body string, spot markerSpot, replacement string) string {
 	return body[:spot.start] + replacement + body[end:]
 }
 
-func composeBody(body, signature string, opts composeOptions, images *inlineimg.Resolver) (string, string, error) {
+func composeBody(body, signature, signatureHTML string, opts composeOptions, images *inlineimg.Resolver) (string, string, error) {
 	var html string
 	const (
 		sigMany  = "keep only one ⁂ signature marker, or delete all markers to send unsigned"
@@ -160,7 +168,7 @@ func composeBody(body, signature string, opts composeOptions, images *inlineimg.
 			if marker == nil {
 				return "", "", fmt.Errorf("put ⁂ in its own paragraph outside quotes, lists, and code blocks (add blank lines), or delete it")
 			}
-			doc.ReplaceChild(doc, marker, &signatureBlock{signature: sigText})
+			doc.ReplaceChild(doc, marker, &signatureBlock{signature: sigText, html: signatureHTML})
 		}
 		if hasQuote {
 			marker := markerParagraph(doc, source, quoteSpot, QuoteMarker)
