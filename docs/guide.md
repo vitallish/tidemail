@@ -987,6 +987,7 @@ no borders; with `basic` it shows borders, cell padding, the bold header and the
 column alignment. Not checked yet: Outlook, Gmail mobile and dark-mode clients.
 The `#999` border was chosen to read on light and dark backgrounds, not tested
 on either.
+
 ### Images in messages
 
 Attach the image first, then refer to it by its file name in the Markdown:
@@ -1343,6 +1344,27 @@ The compose body is Markdown. It is sent as HTML, with the text you typed as the
 plain-text part. The GitHub-flavored extensions work: pipe tables, `~~strikethrough~~`,
 bare web addresses that become links, and `- [ ]` task lists (shown as checkboxes,
 which some mail programs hide).
+
+### Rebinding keys
+
+Most keys are fixed, but a few can be changed in a `[keys]` table in
+`config.toml`. Each entry is a key name and a list of keys; the first key is the
+one shown in hints and help. Currently supported:
+
+| Name | Default | Action |
+|---|---|---|
+| `AttachFile` | `alt+f` | Attach a file in compose |
+
+```toml
+[keys]
+AttachFile = ["ctrl+o"]   # for terminals or setups where Alt chords don't work
+```
+
+An unknown name, or an entry with no key, is reported in the status line and
+ignored; the other entries still apply. TideMail does not check that the new
+key is free, so pick one that nothing else in the same screen uses. The compose
+footer and the command palette follow the new key. Changes apply at startup and
+after saving Settings.
 
 A standalone `⁂` in the compose body marks where your signature will be inserted
 when sending. New messages, replies, forwards, and email-link compositions include
