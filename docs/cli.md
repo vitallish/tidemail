@@ -130,6 +130,30 @@ or older draft without that marker sends unsigned when sent from the inbox
 composer. Direct CLI sends and the CLI wizard keep their signature options and
 do not interpret body text as a marker.
 
+## Replying from the command line
+
+`draft create` and `send` take `--reply-to cache:ID` (an ID from `messages list` or
+`messages search`) to answer a cached message: they set `In-Reply-To` and
+`References`, default the subject to `Re: …` and the recipient to the original's
+Reply-To or sender, and quote the original as `--quote` says:
+
+- `marker` (the default): the body gets the signature marker and the quote marker
+  `⁑`; the quote is resolved from the cache when the message is built, with the
+  original's tables and links, and a draft created this way opens in the composer
+  with the marker in place.
+- `text`: the quote is copied into the body as editable Markdown (`> ` lines, tables
+  as pipe tables).
+- `none`: no quote.
+
+```bash
+tidemail draft create --reply-to cache:123 --body "Thanks, see below." --json
+tidemail send --reply-to cache:123 --quote text --body-file answer.md --dry-run
+```
+
+`--quote marker` does not work with the interactive wizard (use `--quote text`).
+Agents need `messages.read` as well as `drafts.create`, because the reply copies
+the original's body.
+
 ## Cached inbox reads
 
 `messages list` reads the cached unified inbox. `messages search` searches the
