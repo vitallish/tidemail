@@ -497,6 +497,7 @@ A plugin with the `contacts_read` permission can serve as an external address bo
 |---|---|
 | `j` / `k` | Move down or up |
 | `PgDn` / `PgUp`, `Shift+J` / `Shift+K` | Page down or up in the message list and reading pane |
+| `Ctrl+J` / `Ctrl+K` | Scroll the open message one row while the message list has focus |
 | `Tab` / `Shift+Tab` | Move between panes or compose fields |
 | `Up` / `Down` (compose headers) | Move between From, To, Cc, Bcc, and Subject |
 | `Enter` | Expand/collapse a conversation parent; open a child, single message, draft or picker; immediately sync a folder |

@@ -69,6 +69,9 @@ All notable changes to TideMail are documented in this file.
   so terminals can open them with Ctrl+click. A label that wraps is linked on
   every line, and prose that only looks like a button is never linked.
   TideMail's own click handling is unchanged.
+- `Ctrl+J` / `Ctrl+K` scroll the open message one row down or up while the message
+  list keeps focus, so a long message can be read without moving to the reader.
+  `J`/`K` still page the list.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret

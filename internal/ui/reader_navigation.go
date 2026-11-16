@@ -10,6 +10,9 @@ func (m Model) readerOnlyNavigation(msg tea.Msg) bool {
 	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.focused == paneMessages {
+			return m.readerOpen() && keyMatches(msg, m.keys.ReaderScrollUp, m.keys.ReaderScrollDown)
+		}
 		return m.focused == paneContent && keyMatches(msg, m.keys.Up, m.keys.Down)
 	case readerSelectionTick:
 		return true
@@ -28,6 +31,26 @@ func (m Model) readerOnlyNavigation(msg tea.Msg) bool {
 		return ok && target == paneContent
 	}
 	return false
+}
+
+// readerOpen reports whether the reader pane is showing a message.
+func (m Model) readerOpen() bool { return m.contentMessageID != 0 }
+
+// scrollReaderFromList scrolls the open message one row while the message list
+// keeps focus, so a long message can be read without leaving the list. The
+// list, its cursor, and the open message are untouched; with no message open
+// there is nothing to scroll.
+func (m Model) scrollReaderFromList(delta int) (tea.Model, tea.Cmd) {
+	if m.focused != paneMessages || !m.readerOpen() {
+		return m, nil
+	}
+	if delta < 0 {
+		m.viewport.ScrollUp(1)
+	} else {
+		m.viewport.ScrollDown(1)
+	}
+	m.reconcileContentFocus(delta)
+	return m, nil
 }
 
 // Reconcile position without scrolling or implying activation intent. Retain a

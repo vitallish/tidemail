@@ -1,6 +1,6 @@
 # Reader scrolling validation
 
-Reader-only Up/Down movements and wheel events reuse the unchanged sidebar and
+Reader-only Up/Down movements, `Ctrl+J`/`Ctrl+K` scrolling from the message list, and wheel events reuse the unchanged sidebar and
 message-list output. The reader pane and status line remain live. Every other
 event invalidates these pane strings, including mail updates, resize, settings,
 theme changes, pane changes, and overlay transitions. Existing body and viewport
