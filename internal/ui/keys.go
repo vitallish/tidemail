@@ -76,6 +76,7 @@ type KeyMap struct {
 	OpenInBrowser key.Binding
 	ToggleImages  key.Binding
 	SaveAttach    key.Binding
+	OpenAttach    key.Binding
 
 	// Account manager specific
 	Add             key.Binding
@@ -228,6 +229,7 @@ var DefaultKeys = KeyMap{
 	CycleSender: key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "change sender")),
 
 	SaveAttach: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "save attachments")),
+	OpenAttach: key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "open attachment")),
 
 	Confirm:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
 	Cancel:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),

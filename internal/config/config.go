@@ -216,6 +216,7 @@ type DisplayConfig struct {
 	StarredFirst            bool   `toml:"starred_first"`
 	Notifications           bool   `toml:"notifications"`
 	Browser                 string `toml:"browser"`
+	AttachmentOpenCmd       string `toml:"attachment_open_cmd"` // optional: shell command to open an attachment; {file} is its path (empty = platform default)
 	Density                 string `toml:"density"`
 	PaneCorners             string `toml:"pane_corners"` // "square" or "round"
 	Shadow                  bool   `toml:"shadow"`       // drop shadow behind modal overlays

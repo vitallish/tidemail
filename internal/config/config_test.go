@@ -610,3 +610,22 @@ func TestReplyFocusBodySurvivesSaveAndLoad(t *testing.T) {
 		t.Fatal("reply_focus_body did not survive save/load")
 	}
 }
+
+func TestAttachmentOpenCmdSurvivesSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	if cfg.Display.AttachmentOpenCmd != "" {
+		t.Fatal("attachment_open_cmd must default to empty (platform opener)")
+	}
+	cfg.Display.AttachmentOpenCmd = "zathura {file}"
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Display.AttachmentOpenCmd != cfg.Display.AttachmentOpenCmd {
+		t.Fatalf("AttachmentOpenCmd = %q", got.Display.AttachmentOpenCmd)
+	}
+}

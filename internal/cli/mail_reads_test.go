@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/mailapp"
 )
 
 func mailReadFixture(t *testing.T) int64 {
@@ -150,5 +151,94 @@ func TestMailReadPagesKeepAccountIdentity(t *testing.T) {
 	out.Reset()
 	if code := RunMailRead("messages", []string{"list", "--limit", "1", "--offset", "1", "--json"}, &out, &diagnostics); code != 0 || !strings.Contains(out.String(), `"total":2`) || !strings.Contains(out.String(), fmt.Sprintf(`"id":"cache:%d"`, first)) || strings.Contains(out.String(), `Invoice second`) {
 		t.Fatalf("bounded page %d %s", code, out.String())
+	}
+}
+
+func attachmentFixture(t *testing.T) int64 {
+	t.Helper()
+	id := mailReadFixture(t)
+	database, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	for _, a := range []db.Attachment{
+		{Filename: "plan.pdf", ContentType: "application/pdf", Data: []byte("%PDF"), Size: 4},
+		{Filename: "logo.png", ContentType: "image/png", ContentID: "l", Inline: true, Data: []byte("PNG"), Size: 3},
+		{Filename: "data.csv", ContentType: "text/csv", Data: []byte("a,b"), Size: 3},
+	} {
+		if _, err := database.SaveAttachment(id, a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return id
+}
+
+func TestMessagesAttachmentsListsOpenableParts(t *testing.T) {
+	id := attachmentFixture(t)
+	var out, diag bytes.Buffer
+	if code := RunMailRead("messages", []string{"attachments", fmt.Sprint(id), "--json"}, &out, &diag); code != 0 {
+		t.Fatalf("%d: %s", code, diag.String())
+	}
+	s := out.String()
+	if !strings.Contains(s, `"number":1`) || !strings.Contains(s, "plan.pdf") || !strings.Contains(s, `"number":2`) || !strings.Contains(s, "data.csv") {
+		t.Fatalf("missing attachments: %s", s)
+	}
+	if strings.Contains(s, "logo.png") {
+		t.Fatalf("embedded image listed: %s", s)
+	}
+	out.Reset()
+	if code := RunMailRead("messages", []string{"attachments", fmt.Sprint(id)}, &out, &diag); code != 0 || !strings.Contains(out.String(), "1  plan.pdf") {
+		t.Fatalf("plain output: %d %q", code, out.String())
+	}
+}
+
+func TestMessagesOpenOpensTheNumberedAttachment(t *testing.T) {
+	id := attachmentFixture(t)
+	var opened []string
+	orig := openAttachment
+	openAttachment = func(_ *db.DB, a db.Attachment, _ mailapp.OpenAttachmentOptions) (string, error) {
+		opened = append(opened, a.Filename)
+		return "/tmp/x/" + a.Filename, nil
+	}
+	t.Cleanup(func() { openAttachment = orig })
+
+	var out, diag bytes.Buffer
+	if code := RunMailRead("messages", []string{"open", fmt.Sprint(id), "--attachment", "2", "--json"}, &out, &diag); code != 0 {
+		t.Fatalf("%d: %s %s", code, out.String(), diag.String())
+	}
+	if len(opened) != 1 || opened[0] != "data.csv" || !strings.Contains(out.String(), `"path":"/tmp/x/data.csv"`) {
+		t.Fatalf("opened %v, out %s", opened, out.String())
+	}
+	for _, bad := range [][]string{
+		{"open", fmt.Sprint(id), "--json"},
+		{"open", fmt.Sprint(id), "--attachment", "3", "--json"},
+		{"open", "cache:9999", "--attachment", "1", "--json"},
+	} {
+		out.Reset()
+		if code := RunMailRead("messages", bad, &out, &diag); code == 0 {
+			t.Errorf("%v succeeded: %s", bad, out.String())
+		}
+	}
+	if len(opened) != 1 {
+		t.Fatalf("a rejected request still opened something: %v", opened)
+	}
+}
+
+func TestMessagesOpenNeedsItsOwnAgentCapability(t *testing.T) {
+	id := attachmentFixture(t)
+	orig := openAttachment
+	openAttachment = func(*db.DB, db.Attachment, mailapp.OpenAttachmentOptions) (string, error) {
+		t.Error("agent without attachments.open must not open anything")
+		return "", nil
+	}
+	t.Cleanup(func() { openAttachment = orig })
+	var out, diag bytes.Buffer
+	if code := RunMailRead("messages", []string{"open", fmt.Sprint(id), "--attachment", "1", "--agent", "--json"}, &out, &diag); code != 3 || !strings.Contains(out.String(), "permission_denied") {
+		t.Fatalf("default agent policy: %d %s", code, out.String())
+	}
+	out.Reset()
+	if code := RunMailRead("messages", []string{"attachments", fmt.Sprint(id), "--agent", "--json"}, &out, &diag); code != 0 {
+		t.Fatalf("listing is metadata and stays allowed: %d %s", code, out.String())
 	}
 }

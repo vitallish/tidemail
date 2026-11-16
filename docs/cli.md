@@ -188,6 +188,20 @@ messages the cache lacks.
 tidemail messages search "from:ann after:30d" --server --account Work --json
 tidemail messages search "related:cache:123" --server --json
 ```
+Two more actions work on the attachments of a cached message:
+
+```bash
+tidemail messages attachments cache:123 --json   # numbered list of openable parts
+tidemail messages open cache:123 --attachment 2  # open number 2 with the default program
+```
+
+`attachments` lists the parts a person would open (embedded body images are left
+out) with their number, file name, content type, and size. `open` writes a private
+copy under the per-user temporary directory, as the TUI's `w` key does, and starts
+`attachment_open_cmd` or the platform opener without waiting for it; it prints the
+copy's path. Both read the local cache only and fail with `not_found` for an unknown
+ID. `open` exits 2 for a missing or out-of-range `--attachment`, and 1 with
+`open_failed` when the program cannot be started.
 
 List and search results contain metadata, including subject, sender, recipients,
 account, mailbox, read state, and attachment presence. They do not contain full
@@ -299,6 +313,9 @@ agent_permissions = [
 
 `messages.search_server` (not in the defaults) lets `messages search --server`
 contact the mail server and store what it finds in the cache.
+`messages attachments` needs only `messages.metadata`. `messages open` starts a
+program on this computer and writes a file, so it needs its own `attachments.open`
+capability, which is off unless you add it to `agent_permissions`.
 `messages.read` grants full cached body retrieval. `mail.send` grants the ability
 to send in agent mode, but the command still needs invocation approval through
 `--yes` or approved interactive preview. Agent queue processing and retry require
