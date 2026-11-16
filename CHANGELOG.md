@@ -23,6 +23,15 @@ All notable changes to TideMail are documented in this file.
   (`compose_preview_server = true`, or **Settings → Editor → Live preview
   server**) it is served from a loopback-only local server and updates as you
   type, with no reload. See "Previewing a draft in the browser" in the guide.
+- Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
+  the macOS Keychain, via `security`, the same way Linux already uses
+  `secret-tool`. Previously macOS had no working backend and every secret
+  silently fell back to plaintext in `config.toml` despite the docs claiming
+  Keychain support. (#130)
+- **Settings → Advanced → View Logs** can copy the log to the clipboard (`c`)
+  or save it to a file (`s`) through the same folder browser attachments save
+  to, so you can pick the destination. Both are in chronological order (oldest
+  first), the reverse of the pane's own display, with errors marked.
 - Import a whole folder of contact files: in the contact import picker, the
   first row reads every `.vcf` file in the folder you are in (a vdirsyncer or
   Nextcloud address book is one folder of `.vcf` files). One unreadable file
@@ -52,6 +61,25 @@ All notable changes to TideMail are documented in this file.
 
 ### Fixed
 
+- The save-attachment picker no longer crashes when its starting folder cannot
+  be read, such as a missing `~/Downloads`; it shows an error instead.
+- Contact marks follow the contact, not its row position, so adding, editing or
+  importing no longer leaves marks on different contacts, which `d` then deleted.
+- Clicking, right-clicking or drag-selecting in the reading pane no longer leaves
+  an unread message with a spinner that never finishes and is never marked read.
+- On a server without IDLE, push accounts now fall back to checking every five
+  minutes as documented, instead of silently waiting for the 30-minute safety
+  poll.
+- Saving Settings no longer blanks an open search; it is run again.
+- Deleting or hiding a folder no longer leaves an empty message pane under the
+  newly highlighted folder; that folder now loads.
+- Deleting an account now also removes its drafts, their attachments and its
+  queued outbox mail, which used to stay behind in the local database. The
+  confirmation says what is removed. Rows that cannot be tied to exactly one
+  account are kept rather than risk deleting another account's data.
+- Inline images were blank inside tmux: the Kitty graphics escapes were sent
+  raw and tmux dropped them. They are now wrapped in tmux's DCS passthrough
+  (needs `allow-passthrough on`).
 - The recent-searches list is correct again after you clear the search box (it
   no longer shows a leftover filtered subset), closes when deleting its last
   matching entry, and clicking an entry highlights it instead of selecting a
