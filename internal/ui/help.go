@@ -322,6 +322,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{"CLI", "tidemail cli: quit after send, skip review, default signature (interactive use only)"},
 				{"Personal dictionary", "Editor section: a adds a spell-check word, d removes the selected one, esc goes back"},
 				{"Changelog", "read the bundled release notes; j/k or arrows scroll, PgUp/PgDn page, g/G jump to top/bottom"},
+				{"Advanced → View Logs", "j/k or arrows scroll; c copies the whole log, s opens a folder browser to save it (chronological, oldest first)"},
 				{"Support", "select Open or Copy link with arrows; Enter activates; ctrl+c copies"},
 				{"Pane header bars", "show titles and shortcuts above panes; off restores one row and moves focused-pane details to the status bar"},
 				{"Needs You / Waiting on Them in sidebar", "off hides that row from the sidebar; nothing is deleted"},
@@ -348,7 +349,7 @@ func helpSections(keys KeyMap) []helpSection {
 			entries: []helpEntry{
 				{"enable", "Settings → Display → Mouse support (off by default; keeps native text selection while off)"},
 				{"click", "select a row or LINKS entry, or focus a pane; reader clicks never open links; click a search row to edit"},
-				{"reader drag", "select text with Focus Line on/off; ctrl+c copies displayed line breaks; drag above/below to autoscroll; next click clears"},
+				{"reader drag", "select text with Focus Line on/off; ctrl+c or y copies displayed line breaks; drag above/below to autoscroll; next click clears"},
 				{"double-click", "expand/collapse a conversation parent; open a child, single message or draft; on a sidebar row, expand/collapse or sync like enter"},
 				{"scroll wheel", "move three rows; reader clears link selection; keep pane focus"},
 				{"right-click", "select the row and open a menu of its actions (folder, account, or message); enter or click runs one, esc closes"},
