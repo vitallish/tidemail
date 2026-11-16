@@ -46,11 +46,15 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.Outgoing
 // and the account's signature, without validating recipients or sender. Sending
 // and the browser preview both come through composeBody, so they cannot differ.
 func ComposeHTML(account config.AccountConfig, body string) (string, error) {
-	_, html, err := composeBody(body, account.Signature)
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return "", err
+	}
+	_, html, err := composeBody(body, account.Signature, sigHTML)
 	return html, err
 }
 
-func composeBody(body, signature string) (string, string, error) {
+func composeBody(body, signature, signatureHTML string) (string, string, error) {
 	var html string
 	switch strings.Count(body, SignatureMarker) {
 	case 0:
