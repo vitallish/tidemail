@@ -92,6 +92,7 @@ const (
 	sfComposeVim
 	sfComposeSearchRegex
 	sfComposeWordWrap
+	sfComposeTableStyle
 	sfComposeSpell
 	sfSpellLang
 	sfSpellDictionary
@@ -194,6 +195,8 @@ var (
 	tagStyleValues        = []string{config.TagStylePills, config.TagStyleCompact, config.TagStylePlain, config.TagStyleGlyphPills, config.TagStyleIcons}
 	tagEndsValues         = []string{config.TagEndsSquare, config.TagEndsRound, config.TagEndsNone}
 	dateFormatLabels      = []string{"Relative", "Absolute", "None"}
+	tableStyleLabels      = []string{"None", "Basic", "Custom"}
+	tableStyleValues      = []string{config.TableStyleNone, config.TableStyleBasic, config.TableStyleCustom}
 	aiProviderLabels      = []string{"none", "OpenAI", "Claude", "Gemini", "Ollama"}
 	aiProviderIDs         = []string{"", "openai", "claude", "gemini", "ollama"}
 	openaiModelLabels     = []string{"gpt-4o-mini", "gpt-4o", "gpt-4.1", "o3-mini", "o1"}
@@ -269,6 +272,11 @@ func dateFormatIndex(s string) int {
 	return 0 // default to Relative
 }
 
+func tableStyleIndex(s string) int {
+	style, _ := config.NormalizeTableStyle(s)
+	return max(0, slices.Index(tableStyleValues, style))
+}
+
 func spellLangIndex(id string) int {
 	for i, l := range spellLangs {
 		if l.id == id {
@@ -339,6 +347,7 @@ type Settings struct {
 	showNeedsYou            bool
 	showWaiting             bool
 	dateFormatIdx           int // 0=Relative, 1=Absolute, 2=None
+	tableStyleIdx           int // index into tableStyleValues
 	markReadOnOpen          bool
 	markReadOnFocus         bool
 	focusLine               bool
@@ -467,6 +476,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		retroFgInput:            mkInput(retroTweak.Fg, "optional #rrggbb", false),
 		retroAccentInput:        mkInput(retroTweak.Accent, "optional #rrggbb", false),
 		dateFormatIdx:           dateFormatIndex(cfg.Display.DateFormat),
+		tableStyleIdx:           tableStyleIndex(cfg.Display.ComposeTableStyle),
 		markReadOnOpen:          cfg.Display.MarkReadOnOpen,
 		markReadOnFocus:         cfg.Display.MarkReadOnFocus,
 		focusLine:               cfg.Display.FocusLine,
@@ -587,6 +597,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.ComposeVim = s.composeVim
 	cfg.Display.ComposeSearchRegex = s.composeSearchRegex
 	cfg.Display.ComposeWordWrap = s.composeWordWrap
+	cfg.Display.ComposeTableStyle = tableStyleValues[s.tableStyleIdx] // compose_table_css is config-file only and is left as is
 	cfg.Display.ComposeSpell = s.composeSpell
 	cfg.Display.ComposeSpellLang = spellLangs[s.spellLangIdx].id
 	cfg.Display.CLIQuitAfterSend = s.cliQuitAfterSend
@@ -842,7 +853,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		fields = append(fields, sfReadingWidth, sfShowHeaders, sfMarkReadOnOpen, sfMarkReadOnFocus, sfActionableLinks, sfFilterLinks, sfImages)
 		return append(fields, sfBrowser, sfConfirmQuit, sfNotifications, sfMouseSupport)
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeTableStyle, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1138,7 +1149,7 @@ func (s Settings) focusedTextInputCursorPosition() int {
 
 func (s Settings) isPickerField() bool {
 	switch s.focusedField {
-	case sfProvider, sfDisplayDensity, sfPaneCorners, sfTagStyle, sfImages, sfTheme, sfDateFormat, sfSpellLang,
+	case sfProvider, sfDisplayDensity, sfPaneCorners, sfTagStyle, sfImages, sfTheme, sfDateFormat, sfComposeTableStyle, sfSpellLang,
 		sfOpenAIModel, sfClaudeModel, sfGeminiModel, sfOllamaModel:
 		return true
 	}
@@ -1370,6 +1381,17 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 		} else if keyMatches(key, keys.Right) || keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.spellLangIdx = (s.spellLangIdx + 1) % len(spellLangs)
 			s.setFocusedField(sfSpellLang)
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
+	case sfComposeTableStyle:
+		if keyMatches(key, keys.Left) {
+			s.tableStyleIdx = (s.tableStyleIdx + len(tableStyleLabels) - 1) % len(tableStyleLabels)
+		} else if keyMatches(key, keys.Right) || keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.tableStyleIdx = (s.tableStyleIdx + 1) % len(tableStyleLabels)
 		} else if keyMatches(key, keys.Down) {
 			s.setFocusedField(s.nextField())
 		} else if keyMatches(key, keys.Up) {
@@ -2168,6 +2190,9 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addToggle("Vim keys in compose", s.composeVim, sfComposeVim)
 		b.addToggle("Wrap at word boundaries", s.composeWordWrap, sfComposeWordWrap)
 		b.addHint("Wraps compose text between words instead of mid-word. Display only; your message text is not changed.")
+		b.markAnchor(sfComposeTableStyle)
+		b.addLine(s.renderTableStyleSelector(b.width, b.chrome))
+		b.addHint(s.fieldHint(sfComposeTableStyle))
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)
 		b.addHint("Shows an optional Regex toggle in compose Find. Searches stay literal until you enable it in the search bar.")
 		b.addToggle("Spell check in compose (F7)", s.composeSpell, sfComposeSpell)
@@ -3259,6 +3284,13 @@ func (s Settings) renderPaneCornersSelector(width int, chrome managerChrome) str
 	return renderSoftRow("Pane corners", focused, renderSettingsPicker(pickerW, name, focused, chrome), width, labelW, chrome)
 }
 
+func (s Settings) renderTableStyleSelector(width int, chrome managerChrome) string {
+	focused := s.focusedField == sfComposeTableStyle
+	labelW := formLabelWidth(width)
+	pickerW := max(1, width-labelW-2)
+	return renderSoftRow("Table style", focused, renderSettingsPicker(pickerW, tableStyleLabels[s.tableStyleIdx], focused, chrome), width, labelW, chrome)
+}
+
 func (s Settings) renderImagesSelector(width int, chrome managerChrome) string {
 	focused := s.focusedField == sfImages
 	name := "Auto"
@@ -3284,6 +3316,8 @@ func renderSettingsPicker(width int, value string, focused bool, chrome managerC
 
 func (s Settings) fieldHint(field settingsField) string {
 	switch field {
+	case sfComposeTableStyle:
+		return "Borders and padding for Markdown tables in sent mail. Custom uses compose_table_css in config.toml."
 	case sfImages:
 		return "Auto shows embedded images where supported; Off uses text placeholders. Remote images stay blocked until i."
 
