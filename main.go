@@ -14,6 +14,7 @@ import (
 	"github.com/allisonhere/tidemail/internal/cli"
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/mailapp"
 	"github.com/allisonhere/tidemail/internal/termimage"
 	"github.com/allisonhere/tidemail/internal/ui"
 )
@@ -162,6 +163,7 @@ func run() (code int, restartExec string) {
 		// --preview-manual-update / --preview-update-progress are dev UI entry points.
 		ui.SetChangelog(changelog)
 		ui.PruneEmailExports()
+		mailapp.PruneOpenedAttachments()
 		m := ui.NewModel(database, cfg, resolvedVersion(), opts.previewManualUpdate || opts.previewUpdateProgress)
 		// Experimental plugins; a missing or broken plugin directory is never fatal.
 		m.LoadPlugins()

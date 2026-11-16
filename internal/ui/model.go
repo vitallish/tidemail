@@ -89,6 +89,7 @@ const (
 	overlayCompose
 	overlayCommandPalette
 	overlaySaveAttach
+	overlayOpenAttach
 	overlayMoveMessage
 	overlayGrammarPreview
 	overlayLogViewer
@@ -270,6 +271,7 @@ type Model struct {
 	saveAttachPicker     filePicker
 	saveAttachPickerKind saveAttachPickerKind
 	movePicker           movePicker
+	openAttach           openAttachPicker
 	filterManager        filterManager
 	outboxItems          []db.OutboxItem
 	outboxCursor         int
@@ -1983,6 +1985,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case AttachmentOpenedMsg:
+		text, isErr := attachmentOpenedStatus(msg)
+		m.setStatus(text, isErr)
+		return m, m.clearStatusCmd()
+
 	case AttachmentsSavedMsg:
 		if msg.Err != nil {
 			m.setStatus(fmt.Sprintf("save attachments failed: %v", msg.Err), true)
@@ -2685,6 +2692,12 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.overlay = overlaySaveAttach
 			return m, nil
+		}
+		return m, nil
+
+	case keyMatches(msg, m.keys.OpenAttach):
+		if m.focused == paneContent {
+			return m.startOpenAttachment()
 		}
 		return m, nil
 
@@ -3403,6 +3416,9 @@ func (m Model) handleOverlayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case overlaySaveAttach:
 		return m.handleSaveAttachPicker(msg)
+
+	case overlayOpenAttach:
+		return m.handleOpenAttachPicker(msg)
 
 	case overlayMoveMessage:
 		return m.handleMovePicker(msg)
