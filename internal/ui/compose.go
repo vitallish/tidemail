@@ -112,12 +112,11 @@ type ComposeModel struct {
 	// Offline spell check panel (see spell.go). spellAdded collects words the
 	// user added to their dictionary; the model persists and clears them.
 	spellOpen    bool
-	quoteOpen    bool     // the read-only view of the quoted message is showing
-	quoteLines   []string // its lines
-	quoteTop     int      // first visible line
-	quoteText    string   // the text copied by y
-	expandedFrom string   // the body before the last quote expansion, for one Ctrl+Z
-	expandedTo   string   // the body that expansion produced
+	quoteOpen    bool   // the read-only view of the quoted message is showing
+	quoteTop     int    // first visible line
+	quoteText    string // the text copied by y
+	expandedFrom string // the body before the last quote expansion, for one Ctrl+Z
+	expandedTo   string // the body that expansion produced
 	spellIdx     int
 	spellPick    int
 	spellFixed   int

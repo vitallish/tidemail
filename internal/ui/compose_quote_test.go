@@ -10,11 +10,18 @@ import (
 	"github.com/allisonhere/tidemail/internal/mailapp"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // quoteFixture opens a reply to a cached HTML message with a table, with the
 // quote marker setting on and the lookup reading the test database.
 func quoteFixture(t *testing.T) (ComposeModel, db.Message) {
+	t.Helper()
+	return quoteFixtureHTML(t, `<p>Totals for <b>March</b></p><table><tr><th>Item</th><th>Qty</th></tr><tr><td>Pens</td><td>3</td></tr></table>`)
+}
+
+// quoteFixtureHTML is quoteFixture with the original's HTML body chosen by the test.
+func quoteFixtureHTML(t *testing.T, bodyHTML string) (ComposeModel, db.Message) {
 	t.Helper()
 	database, err := db.OpenPath(t.TempDir() + "/mail.db")
 	if err != nil {
@@ -27,7 +34,7 @@ func quoteFixture(t *testing.T) (ComposeModel, db.Message) {
 		MailboxID: box, UID: 1, MessageID: "<orig@x>", Subject: "Budget", From: "Ann Lee <ann@example.com>",
 		Date:     time.Date(2026, 3, 10, 9, 5, 0, 0, time.UTC),
 		BodyText: "Totals\nItem Qty\nPens 3",
-		BodyHTML: `<p>Totals for <b>March</b></p><table><tr><th>Item</th><th>Qty</th></tr><tr><td>Pens</td><td>3</td></tr></table>`,
+		BodyHTML: bodyHTML,
 	}
 	if err := database.UpsertMessage(original); err != nil {
 		t.Fatal(err)
@@ -205,5 +212,39 @@ func TestCtrlZRightAfterExpandingPutsTheMarkerBack(t *testing.T) {
 	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyCtrlZ}, DefaultKeys)
 	if !strings.Contains(c.bodyInput.Value(), "typed after") && strings.Contains(c.bodyInput.Value(), mailapp.QuoteMarker) {
 		t.Errorf("an edited body was overwritten by the pre-expansion text: %q", c.bodyInput.Value())
+	}
+}
+
+// A long line or an unbroken URL used to be cut off at the right edge of the
+// read-only view (#28). It must wrap, stay reachable by scrolling, and the copy
+// key must still hand over the original text without added line breaks.
+func TestQuoteViewWrapsLongLinesInsteadOfCuttingThem(t *testing.T) {
+	url := "https://example.com/" + strings.Repeat("segment/", 15) + "END"
+	long := strings.Repeat("a long sentence that keeps going ", 6)
+	c, _ := quoteFixtureHTML(t, "<p>"+long+"</p><p>"+url+"</p>")
+	var copied string
+	old := copyQuoteText
+	copyQuoteText = func(s string) error { copied = s; return nil }
+	t.Cleanup(func() { copyQuoteText = old })
+	c.bodyInput.SetSize(40, 6)
+
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyF3}, DefaultKeys)
+	rows := c.quoteRows()
+	for _, row := range rows {
+		if w := ansi.StringWidth(row); w > 40 {
+			t.Fatalf("row is %d cells wide, text area is 40: %q", w, row)
+		}
+	}
+	if joined := strings.Join(rows, ""); !strings.Contains(joined, url) {
+		t.Errorf("the URL must survive wrapping, row by row, in order:\n%s", strings.Join(rows, "\n"))
+	}
+	// Scrolling to the end shows the tail that used to be cut off.
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")}, DefaultKeys)
+	if view := c.quoteViewBody(); !strings.Contains(view, "END") {
+		t.Errorf("end of the view does not show the URL tail:\n%s", view)
+	}
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}, DefaultKeys)
+	if !strings.Contains(copied, url) {
+		t.Errorf("copy must hand over the unwrapped URL, got %q", copied)
 	}
 }

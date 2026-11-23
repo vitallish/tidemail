@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/allisonhere/tidemail/internal/clipboard"
 	"github.com/allisonhere/tidemail/internal/db"
@@ -81,7 +82,6 @@ func (c ComposeModel) openQuoteView() ComposeModel {
 	}
 	q := mailapp.BuildQuote(original)
 	c.quoteText = q.Attribution + "\n\n" + q.Text
-	c.quoteLines = strings.Split(c.quoteText, "\n")
 	c.quoteTop = 0
 	c.quoteOpen = true
 	return c
@@ -90,7 +90,7 @@ func (c ComposeModel) openQuoteView() ComposeModel {
 // updateQuoteView handles keys while the quoted message is shown.
 func (c ComposeModel) updateQuoteView(km tea.KeyMsg, keys KeyMap) (ComposeModel, tea.Cmd, bool) {
 	page := max(1, c.bodyInput.h-1)
-	last := max(0, len(c.quoteLines)-c.bodyInput.h)
+	last := max(0, len(c.quoteRows())-c.bodyInput.h)
 	switch {
 	case keyMatches(km, keys.Cancel), km.String() == "q", km.String() == "f3":
 		c.quoteOpen = false
@@ -119,13 +119,23 @@ func (c ComposeModel) updateQuoteView(km tea.KeyMsg, keys KeyMap) (ComposeModel,
 	return c, nil, false
 }
 
+// quoteRows is the quoted text wrapped to the text area, so a long line or a
+// URL is scrolled through instead of being cut off at the edge. It is computed
+// from the current width each time, so a resize needs no bookkeeping. quoteText
+// itself stays unwrapped: that is what the copy key puts on the clipboard.
+func (c ComposeModel) quoteRows() []string {
+	return strings.Split(ansi.Wrap(c.quoteText, max(1, c.bodyInput.w), ""), "\n")
+}
+
 // quoteViewBody is the text area while the quoted message is shown.
 func (c ComposeModel) quoteViewBody() string {
 	h := max(1, c.bodyInput.h)
+	all := c.quoteRows()
+	top := min(c.quoteTop, max(0, len(all)-h))
 	rows := make([]string, 0, h)
 	for i := 0; i < h; i++ {
-		if n := c.quoteTop + i; n < len(c.quoteLines) {
-			rows = append(rows, c.quoteLines[n])
+		if n := top + i; n < len(all) {
+			rows = append(rows, all[n])
 		} else {
 			rows = append(rows, "")
 		}
@@ -136,8 +146,9 @@ func (c ComposeModel) quoteViewBody() string {
 // quotePanel is the footer while the quoted message is shown.
 func (c ComposeModel) quotePanel(width int, chrome managerChrome) string {
 	base := lipgloss.NewStyle().Background(chrome.baseBg)
+	total := len(c.quoteRows())
 	head := base.Foreground(chrome.muted).Render("  quoted message (read only; the reply is unchanged)  ") +
-		base.Foreground(chrome.muted).Render(fmt.Sprintf("line %d/%d", min(len(c.quoteLines), c.quoteTop+1), len(c.quoteLines)))
+		base.Foreground(chrome.muted).Render(fmt.Sprintf("line %d/%d", min(total, c.quoteTop+1), total))
 	keyStyle, lblStyle := base.Foreground(chrome.text), base.Foreground(chrome.muted)
 	var parts []string
 	for _, p := range [][2]string{{"↑↓", "scroll"}, {"y", "copy"}, {"e", "expand into the message (cannot be undone as a quote)"}, {"esc", "close"}} {

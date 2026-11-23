@@ -30,6 +30,10 @@ All notable changes to TideMail are documented in this file.
 - Deleting a message that another TideMail instance (or a sync) had already
   removed from the local cache no longer reports a failed cache update. The
   server delete succeeded, so there is nothing left to do.
+- The read-only view of the quoted message (`F3` in a reply) wraps long lines and
+  URLs to the width of the text area instead of cutting them off at the edge, and
+  scrolls through the wrapped text. Copying (`y`) still gives the original text,
+  without added line breaks.
 
 ## v1.10.1
 
