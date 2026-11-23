@@ -2678,7 +2678,7 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.setStatus("reply failed: "+err.Error(), true)
 				return m, m.clearStatusCmd()
 			}
-			m.compose = NewReply(*cur, acfg, m.cfg.Accounts, m.addressBook)
+			m.compose = focusReplyBody(NewReply(*cur, acfg, m.cfg.Accounts, m.addressBook), m.cfg.Display.ReplyFocusBody)
 			m.overlay = overlayCompose
 		}
 		return m, nil
@@ -2696,7 +2696,7 @@ func (m Model) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.setStatus("reply all failed: "+err.Error(), true)
 				return m, m.clearStatusCmd()
 			}
-			m.compose = NewReplyAll(*cur, acfg, m.cfg.Accounts, m.addressBook)
+			m.compose = focusReplyBody(NewReplyAll(*cur, acfg, m.cfg.Accounts, m.addressBook), m.cfg.Display.ReplyFocusBody)
 			m.overlay = overlayCompose
 		}
 		return m, nil

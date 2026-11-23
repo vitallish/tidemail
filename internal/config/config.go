@@ -226,6 +226,7 @@ type DisplayConfig struct {
 	ComposeVim              bool   `toml:"compose_vim"`
 	ComposeSearchRegex      bool   `toml:"compose_search_regex"` // expose the advanced Regex search toggle
 	ComposeWordWrap         bool   `toml:"compose_word_wrap"`    // wrap compose text at word boundaries (on by default)
+	ReplyFocusBody          bool   `toml:"reply_focus_body"`     // Reply and Reply All open with the caret in the body (off by default)
 	ComposeSpell            bool   `toml:"compose_spell"`        // offline spell check in compose (off by default)
 	ComposeSpellLang        string `toml:"compose_spell_lang"`   // spell check language code; empty means English
 	ComposeTableStyle       string `toml:"compose_table_style"`  // inline styling for sent Markdown tables: none (default), basic, custom

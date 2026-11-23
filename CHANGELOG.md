@@ -140,6 +140,9 @@ All notable changes to TideMail are documented in this file.
   found by reply headers (`related:<id>`, also `tidemail messages search
   "related:cache:123" [--server]`); `Ctrl+G` also fetches conversation messages the
   cache lacks. The conversation opens out instead of showing one collapsed row.
+- `reply_focus_body` in `[display]` (also **Settings → Editor → Reply opens in the
+  body**): reply and reply all open with the caret in the message body, above the
+  quote, instead of on the first header field. Off by default; forward is unchanged.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
