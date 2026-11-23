@@ -108,6 +108,14 @@ Fill the body from a template; see
 Not combinable with the other body options.
 Piped standard input is the body when none of these is given.
 .TP
+.BI \-\-quote " MODE"
+With \-\-in\-reply\-to, also answer the cached message: sets the Re: subject and the
+recipient (the original's Reply\-To or sender) when not given, and quotes the original as
+MODE says: marker (the original's formatted HTML goes where the quote marker line is,
+resolved when the message is built), text (an editable Markdown quote is copied into the
+body) or none (no quote). Without \-\-quote, \-\-in\-reply\-to only threads. Refused without
+\-\-in\-reply\-to.
+.TP
 .BI \-\-attach " PATH"
 Attach a file; may be repeated.
 .TP
