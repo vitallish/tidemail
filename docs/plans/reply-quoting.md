@@ -38,7 +38,8 @@ Issue: vitallish/tidemail #4 (keep HTML structure when quoting). Written
    one-way: after it the original HTML is no longer attached, so there is no
    re-creating the placeholder. Editor undo (Ctrl+Z) still reverts the body edit
    while the composer is open.
-5. **Everywhere.** `tidemail draft create --reply-to cache:ID [--reply-all]`
+5. **Everywhere.** `tidemail draft create --in-reply-to cache:ID --quote marker`
+   (`--in-reply-to` is upstream's threading flag; `--quote` adds the rest)
    builds the same draft (placeholder plus snapshot), and the sender resolves it
    identically, so the whole path is testable without the TUI. Forward can adopt
    the same mechanism later; not in this change.

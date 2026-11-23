@@ -138,22 +138,22 @@ do not interpret body text as a marker.
 
 ## Replying from the command line
 
-`draft create` and `send` take `--reply-to cache:ID` (an ID from `messages list` or
-`messages search`) to answer a cached message: they set `In-Reply-To` and
-`References`, default the subject to `Re: …` and the recipient to the original's
-Reply-To or sender, and quote the original as `--quote` says:
+`--in-reply-to cache:ID` (above) only sets the threading headers. Adding `--quote`
+also answers the cached message: the subject defaults to `Re: …`, the recipient to
+the original's Reply-To or sender, and the original is quoted as `--quote` says
+(`--quote` without `--in-reply-to` is refused):
 
-- `marker` (the default): the body gets the signature marker and the quote marker
+- `marker`: the body gets the signature marker and the quote marker
   `⁑`; the quote is resolved from the cache when the message is built, with the
   original's tables and links, and a draft created this way opens in the composer
   with the marker in place.
 - `text`: the quote is copied into the body as editable Markdown (`> ` lines, tables
   as pipe tables).
-- `none`: no quote.
+- `none`: no quote, but the subject and recipient are still filled in.
 
 ```bash
-tidemail draft create --reply-to cache:123 --body "Thanks, see below." --json
-tidemail send --reply-to cache:123 --quote text --body-file answer.md --dry-run
+tidemail draft create --in-reply-to cache:123 --quote marker --body "Thanks, see below." --json
+tidemail send --in-reply-to cache:123 --quote text --body-file answer.md --dry-run
 ```
 
 `--quote marker` does not work with the interactive wizard (use `--quote text`).

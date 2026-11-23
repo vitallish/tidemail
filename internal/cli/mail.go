@@ -157,8 +157,8 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	fs.StringVar(&file, "body-file", "", "body file")
 	fs.StringVar(&markdown, "markdown", "", "Markdown body file")
 	fs.StringVar(&templateName, "template", "", "fill the body from a template (see: tidemail templates list)")
-	fs.StringVar(&replyTo, "reply-to", "", "reply to a cached message (an ID from messages list, such as cache:123)")
-	fs.StringVar(&quoteMode, "quote", "marker", "with --reply-to: marker (the original's HTML at the ⁑ line), text (editable Markdown quote) or none")
+	fs.StringVar(&replyTo, "in-reply-to", "", "thread as a reply to a cached message, for example cache:123 (see messages list)")
+	fs.StringVar(&quoteMode, "quote", "", "with --in-reply-to, also set Re: subject, recipient and quote: marker (the original's HTML at the ⁑ line), text (editable Markdown quote) or none")
 	fs.Var(stringList(&attachments), "attach", "attachment path, repeatable")
 	fs.BoolVar(&signature, "signature", true, "append configured signature")
 	fs.BoolVar(&noSignature, "no-signature", false, "omit signature")
@@ -264,9 +264,23 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 			subject = mailtemplate.Fill(t.Subject, vars)
 		}
 	}
-	d := db.Draft{To: to, CC: cc, BCC: bcc, Subject: subject, BodyText: body}
-	var quoteOpts []mailapp.ComposeOption
+	var inReplyTo, references string
 	if replyTo != "" {
+		if agent && !mailapp.Allowed(cfg, "messages.metadata") {
+			return fail(3, "permission_denied", "agent capability denied: messages.metadata")
+		}
+		var code int
+		var id, msg string
+		if inReplyTo, references, code, id, msg = replyHeaders(replyTo); code != 0 {
+			return fail(code, id, msg)
+		}
+	}
+	d := db.Draft{To: to, CC: cc, BCC: bcc, Subject: subject, BodyText: body, InReplyTo: inReplyTo, References: references}
+	var quoteOpts []mailapp.ComposeOption
+	if quoteMode != "" && replyTo == "" {
+		return fail(2, "invalid_arguments", "--quote needs --in-reply-to")
+	}
+	if quoteMode != "" {
 		var code int
 		var failure *replyError
 		d, quoteOpts, failure = applyReply(d, a, cfg, agent, replyTo, quoteMode, signature && !noSignature)
@@ -487,8 +501,9 @@ func runOutboxAction(args []string, out, errOut io.Writer) int {
 	return mailResult(out, errOut, *j, map[string]any{"processed": processed}, 0, "", "")
 }
 
-// applyReply turns a draft into a reply to a cached message: threading headers,
-// "Re:" subject, a default recipient, and the quote as asked. The returned
+// applyReply fills a draft that already carries its threading headers
+// (--in-reply-to) as a reply to that cached message: "Re:" subject, a default
+// recipient, and the quote as asked (--quote). The returned
 // options let PrepareCompose resolve the quote marker from the cache.
 func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent bool, replyTo, quoteMode string, signature bool) (db.Draft, []mailapp.ComposeOption, *replyError) {
 	if quoteMode != "marker" && quoteMode != "text" && quoteMode != "none" {
@@ -499,7 +514,7 @@ func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent boo
 	}
 	id, err := readID(replyTo)
 	if err != nil {
-		return d, nil, &replyError{"invalid_arguments", "invalid --reply-to; use an ID from messages list, such as cache:123", 2}
+		return d, nil, &replyError{"invalid_arguments", "invalid --in-reply-to; use an ID from messages list, such as cache:123", 2}
 	}
 	database, err := db.Open()
 	if err != nil {
@@ -513,8 +528,6 @@ func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent boo
 	if err != nil {
 		return d, nil, &replyError{"database_error", "cannot read the message to reply to", 1}
 	}
-	d.InReplyTo = original.MessageID
-	d.References = strings.TrimSpace(original.References + " " + original.MessageID)
 	if strings.TrimSpace(d.Subject) == "" {
 		d.Subject = original.Subject
 		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(d.Subject)), "re:") {
@@ -550,7 +563,7 @@ func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent boo
 	return d, nil, nil
 }
 
-// replyError is a failure of --reply-to, as the command line reports it.
+// replyError is a failure of --quote, as the command line reports it.
 type replyError struct {
 	code, message string
 	status        int

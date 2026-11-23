@@ -44,7 +44,7 @@ func runHeadless(t *testing.T, args ...string) (int, string) {
 
 func TestDraftCreateReplyKeepsTheMarkerAndThreading(t *testing.T) {
 	id := replyFixture(t)
-	code, out := runHeadless(t, "draft", "create", "--reply-to", id, "--body", "Thanks!", "--json")
+	code, out := runHeadless(t, "draft", "create", "--in-reply-to", id, "--quote", "marker", "--body", "Thanks!", "--json")
 	if code != 0 || !strings.Contains(out, `"drafted"`) {
 		t.Fatalf("code=%d %s", code, out)
 	}
@@ -65,15 +65,15 @@ func TestDraftCreateReplyKeepsTheMarkerAndThreading(t *testing.T) {
 
 func TestSendReplyDryRunResolvesTheQuote(t *testing.T) {
 	id := replyFixture(t)
-	code, out := runHeadless(t, "send", "--reply-to", id, "--body", "Thanks!", "--dry-run", "--json")
+	code, out := runHeadless(t, "send", "--in-reply-to", id, "--quote", "marker", "--body", "Thanks!", "--dry-run", "--json")
 	if code != 0 || !strings.Contains(out, "validated") {
 		t.Fatalf("marker quote: code=%d %s", code, out)
 	}
 	// Unknown message, bad ID, and bad mode are refused with distinct errors.
 	for args, want := range map[string]string{
-		"--reply-to cache:99999 --body x --dry-run --json":                 "not_found",
-		"--reply-to nonsense --body x --dry-run --json":                    "invalid_arguments",
-		"--reply-to " + id + " --quote sideways --body x --dry-run --json": "invalid_arguments",
+		"--in-reply-to cache:99999 --quote none --body x --dry-run --json":    "not_found",
+		"--in-reply-to nonsense --quote none --body x --dry-run --json":       "invalid_arguments",
+		"--in-reply-to " + id + " --quote sideways --body x --dry-run --json": "invalid_arguments",
 	} {
 		if code, out := runHeadless(t, append([]string{"send"}, strings.Fields(args)...)...); code == 0 || !strings.Contains(out, want) {
 			t.Errorf("%q: code=%d %s", args, code, out)
@@ -81,12 +81,33 @@ func TestSendReplyDryRunResolvesTheQuote(t *testing.T) {
 	}
 }
 
-func TestReplyQuoteTextAndNone(t *testing.T) {
+// Without --quote the flag is upstream's: thread only, nothing else filled in.
+func TestInReplyToAloneOnlyThreads(t *testing.T) {
 	id := replyFixture(t)
-	if code, out := runHeadless(t, "draft", "create", "--reply-to", id, "--quote", "text", "--body", "Thanks!", "--json"); code != 0 {
+	if code, out := runHeadless(t, "draft", "create", "--in-reply-to", id, "--to", "bob@example.com", "--subject", "Own subject", "--body", "Hi", "--json"); code != 0 {
 		t.Fatalf("%d %s", code, out)
 	}
-	if code, out := runHeadless(t, "draft", "create", "--reply-to", id, "--quote", "none", "--body", "No quote", "--json"); code != 0 {
+	database, _ := db.Open()
+	defer database.Close()
+	drafts, _ := database.ListDrafts("stable", "Work", "me@example.com")
+	if len(drafts) != 1 {
+		t.Fatalf("drafts %v", drafts)
+	}
+	d := drafts[0]
+	if d.InReplyTo != "<orig@x>" || d.References != "<root@x> <orig@x>" || d.Subject != "Own subject" || d.To != "bob@example.com" || d.BodyText != "Hi" {
+		t.Errorf("--in-reply-to alone must only thread: %+v", d)
+	}
+	if code, out := runHeadless(t, "draft", "create", "--quote", "text", "--body", "x", "--json"); code == 0 || !strings.Contains(out, "--quote needs --in-reply-to") {
+		t.Errorf("--quote without --in-reply-to: code=%d %s", code, out)
+	}
+}
+
+func TestReplyQuoteTextAndNone(t *testing.T) {
+	id := replyFixture(t)
+	if code, out := runHeadless(t, "draft", "create", "--in-reply-to", id, "--quote", "text", "--body", "Thanks!", "--json"); code != 0 {
+		t.Fatalf("%d %s", code, out)
+	}
+	if code, out := runHeadless(t, "draft", "create", "--in-reply-to", id, "--quote", "none", "--body", "No quote", "--json"); code != 0 {
 		t.Fatalf("%d %s", code, out)
 	}
 	database, _ := db.Open()
@@ -112,7 +133,7 @@ func TestReplyQuoteTextAndNone(t *testing.T) {
 
 func TestReplyToNeedsMessagesReadForAgents(t *testing.T) {
 	id := replyFixture(t)
-	code, out := runHeadless(t, "draft", "create", "--reply-to", id, "--body", "x", "--agent", "--json")
+	code, out := runHeadless(t, "draft", "create", "--in-reply-to", id, "--quote", "marker", "--body", "x", "--agent", "--json")
 	if code != 3 || !strings.Contains(out, "messages.read") {
 		t.Fatalf("agent without messages.read: code=%d %s", code, out)
 	}
