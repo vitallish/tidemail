@@ -209,6 +209,7 @@ type DisplayConfig struct {
 	MouseSupport            bool   `toml:"mouse_support"`
 	FilterLinks             bool   `toml:"filter_links"`
 	ShowSender              bool   `toml:"show_sender"`
+	Clipboard               string `toml:"clipboard"` // copy path: "auto" (terminal escape first over SSH), "osc52" or "local"; config file only
 	ThreadedConversations   bool   `toml:"threaded_conversations"`
 	ReadingWidth            int    `toml:"reading_width"`
 	AccountsWidthPercent    int    `toml:"accounts_width_percent"`

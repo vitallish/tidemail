@@ -597,6 +597,7 @@ send_delay_seconds = 5
 send_max_attempts = 3  # total attempts; 1 disables automatic retries
 compose_vim = true
 compose_word_wrap = true  # wrap compose text between words (default); false wraps at the edge
+clipboard = "auto"  # copy path: "auto" (terminal escape first over SSH), "osc52", or "local" (see docs/guide.md, Copy and paste over SSH)
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]

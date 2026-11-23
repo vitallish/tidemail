@@ -17,6 +17,7 @@ import (
 
 	"github.com/allisonhere/tidemail/internal/ai"
 	"github.com/allisonhere/tidemail/internal/auth"
+	"github.com/allisonhere/tidemail/internal/clipboard"
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	imapClient "github.com/allisonhere/tidemail/internal/imap"
@@ -494,6 +495,7 @@ func NewModel(database *db.DB, cfg config.Config, currentVersion string, preview
 	setEditorVimMode(cfg.Display.ComposeVim)
 	setEditorSearchRegex(cfg.Display.ComposeSearchRegex)
 	setEditorWordWrap(cfg.Display.ComposeWordWrap)
+	clipboard.SetMode(cfg.Display.Clipboard)
 	setEditorSpell(cfg.Display.ComposeSpell, cfg.Display.ComposeSpellLang, loadSpellWords(database))
 	addSpellNames(accountSpellEntries(cfg))
 
@@ -2013,7 +2015,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.setComposeStatus("copy failed: "+msg.Err.Error(), true)
 		} else {
-			m.setComposeStatus("copied to clipboard", false)
+			m.setComposeStatus(copiedStatus(msg.Method), false)
 		}
 		return m, m.clearStatusCmd()
 
@@ -4358,6 +4360,11 @@ func (m *Model) renderStatusBar() string {
 	}
 	if linkPart != "" {
 		parts = append(parts, linkPart)
+	}
+	if overSSH() {
+		// Standing, like the outbox part: copying behaves differently here, and
+		// a remote session is easy to forget (tmux, a long-lived terminal).
+		parts = append(parts, m.statusBarInlineText(sb, "ssh"))
 	}
 
 	if m.cfg.Display.ShowPaneHeaders && len(m.mailboxes) > 0 {

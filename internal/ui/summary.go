@@ -55,7 +55,8 @@ var clipboardReadCmd = readClipboardCmd
 
 func copyToClipboardCmd(text string) tea.Cmd {
 	return func() tea.Msg {
-		return ClipboardCopiedMsg{Err: clipboard.Copy(text)}
+		method, err := clipboard.CopyVia(text)
+		return ClipboardCopiedMsg{Err: err, Method: method}
 	}
 }
 
@@ -119,4 +120,17 @@ func grammarFailedStatus(err error) string {
 		reason = string(r[:maxReason-1]) + "…"
 	}
 	return "grammar check failed: " + reason
+}
+
+// overSSH is a seam so tests can show or hide the status bar badge.
+var overSSH = clipboard.OverSSH
+
+// copiedStatus says how a copy went. A terminal escape is fire and forget: the
+// terminal may ignore it (tmux without set-clipboard, a terminal with OSC 52
+// off), so the wording does not claim the clipboard was filled.
+func copiedStatus(method clipboard.Method) string {
+	if method == clipboard.ViaTerminal {
+		return "sent to your terminal's clipboard"
+	}
+	return "copied to clipboard"
 }

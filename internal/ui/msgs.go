@@ -7,6 +7,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/allisonhere/tidemail/internal/autodiscover"
+	"github.com/allisonhere/tidemail/internal/clipboard"
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	"github.com/allisonhere/tidemail/internal/filter"
@@ -316,7 +317,8 @@ type SummarySavedMsg struct {
 }
 
 type ClipboardCopiedMsg struct {
-	Err error
+	Err    error
+	Method clipboard.Method // how it was delivered; a terminal escape cannot be confirmed
 }
 
 type BrowserOpenedMsg struct {
