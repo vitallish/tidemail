@@ -24,23 +24,53 @@ var (
 
 func setComposeReplyMarker(on bool) { composeReplyMarker = on }
 
+// composeQuoteImages is [display] compose_reply_quote_images: whether a new
+// message starts with the quote carrying the original's inline images. Each
+// compose can switch it for itself (ComposeModel.quoteImages).
+var composeQuoteImages bool
+
+func setComposeQuoteImages(on bool) { composeQuoteImages = on }
+
+// composeQuoteImageLoader reads the quoted message's cached image parts.
+var composeQuoteImageLoader mailapp.QuoteImageLoader
+
 // copyQuoteText writes to the system clipboard; a variable so tests never touch it.
 var copyQuoteText = clipboard.Copy
 
 // setComposeQuoteDB makes quote lookups read from database.
 func setComposeQuoteDB(database *db.DB) {
 	if database == nil {
-		composeQuoteLookup = nil
+		composeQuoteLookup, composeQuoteImageLoader = nil, nil
 		return
 	}
+	composeQuoteImageLoader = mailapp.NewQuoteImageLoader(database)
 	composeQuoteLookup = func(messageID string) (db.Message, bool, error) {
 		return database.MessageByMessageID(messageID)
 	}
 }
 
-// quoteOption is the compose option that lets the marker be resolved.
-func quoteOption(replyTo string) mailapp.ComposeOption {
-	return mailapp.WithQuote(strings.TrimSpace(replyTo), composeQuoteLookup)
+// quoteOptions are the compose options that let the marker be resolved, and
+// make the quote carry the original's inline images when images is true.
+func quoteOptions(replyTo string, images bool) []mailapp.ComposeOption {
+	opts := []mailapp.ComposeOption{mailapp.WithQuote(strings.TrimSpace(replyTo), composeQuoteLookup)}
+	if images && composeQuoteImageLoader != nil {
+		opts = append(opts, mailapp.WithQuoteImages(composeQuoteImageLoader))
+	}
+	return opts
+}
+
+// toggleQuoteImages switches whether the quote carries the original's inline
+// images, for this message only. The state is not saved with the draft: a draft
+// opened again starts from the Settings default.
+func (c ComposeModel) toggleQuoteImages() ComposeModel {
+	c.quoteImages = !c.quoteImages
+	if c.quoteImages {
+		c.statusMsg = "quoted message: inline images included"
+	} else {
+		c.statusMsg = "quoted message: inline images left out (alt text only)"
+	}
+	c.isErr = false
+	return c
 }
 
 // ── the quote marker inside the composer ────────────────────────────────────
@@ -112,6 +142,8 @@ func (c ComposeModel) updateQuoteView(km tea.KeyMsg, keys KeyMap) (ComposeModel,
 		} else {
 			c.statusMsg, c.isErr = "quoted message copied", false
 		}
+	case km.String() == "i":
+		c = c.toggleQuoteImages()
 	case km.String() == "e":
 		c.quoteOpen = false
 		c = c.expandQuote()
@@ -151,7 +183,7 @@ func (c ComposeModel) quotePanel(width int, chrome managerChrome) string {
 		base.Foreground(chrome.muted).Render(fmt.Sprintf("line %d/%d", min(total, c.quoteTop+1), total))
 	keyStyle, lblStyle := base.Foreground(chrome.text), base.Foreground(chrome.muted)
 	var parts []string
-	for _, p := range [][2]string{{"↑↓", "scroll"}, {"y", "copy"}, {"e", "expand into the message (cannot be undone as a quote)"}, {"esc", "close"}} {
+	for _, p := range [][2]string{{"↑↓", "scroll"}, {"y", "copy"}, {"i", "quote images " + onOff(c.quoteImages)}, {"e", "expand into the message (cannot be undone as a quote)"}, {"esc", "close"}} {
 		parts = append(parts, keyStyle.Render(p[0])+lblStyle.Render(" "+p[1]))
 	}
 	hints := base.Render("  ") + strings.Join(parts, base.Render("   "))
@@ -220,4 +252,11 @@ func labelQuoteMarker(view string, style lipgloss.Style, width int) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func onOff(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
 }

@@ -832,9 +832,22 @@ line becomes `On <date>, <sender> wrote:` followed by the original message
 in a quote block that keeps its structure (tables, lists, links, emphasis), with a
 `> ` quoted copy in the plain-text part. Because it is a line like any other you
 can move it: put your answer above it, below it, or between its parts, or delete the
-line to send no quote at all. Scripts, styles, forms, frames, `http` and inline
-images, and tracking pixels are removed from the quote; `https` images stay, as in
-other mail clients.
+line to send no quote at all. Scripts, styles, forms, frames, `http` images, and
+tracking pixels are removed from the quote; `https` images stay, as in other mail
+clients. The original's inline pictures (logos, charts, screenshots sent as parts of
+the message, `cid:` images) show as their alt text unless you ask for them, see below.
+
+**Inline images in the quote.** Press `F10` in the message (or `i` in the `F3`
+view, or **Quote inline images** in the command palette) to include the original's
+inline images in this message: they are attached to the reply as related parts and the
+quote shows them. The default for new messages is **Settings → Editor → Quote inline
+images in replies** (`compose_reply_quote_images`, off). The switch applies to this
+message only and is not saved with the draft, so a draft opened later starts from the
+setting. Only pictures cached with the original are carried (open the message once so
+its body is fetched), only PNG, JPEG and GIF, at most 5 MB in all; anything else, and
+anything that is missing, stays as alt text, and never stops a send. The preview (`F4`)
+shows them too. On the command line: `--quote-images` / `--no-quote-images` with
+`--in-reply-to ID --quote marker`.
 
 - `F3` (or **View or copy the quoted message** in the command palette) shows the
   original read-only without changing your reply: `↑`/`↓` scroll, `y` copies its

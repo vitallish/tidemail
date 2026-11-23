@@ -23,7 +23,7 @@ with a Settings default.
 - `mailapp.WithQuoteImages(loader)`; the loader reads the cached parts. The
   resolver of the message collects draft and quote parts together.
 - UI: per-message `quoteImages` starting from `compose_reply_quote_images`
-  (off). `Alt+I` in the message, `i` in the `F3` view, command palette item,
+  (off). `F10` in the message, `i` in the `F3` view, command palette item,
   state on the compose state line, help, `keybindings.csv`. Not stored with the
   draft (a reopened draft starts from the setting); noted in the docs.
 - CLI: `--quote-images` / `--no-quote-images` with `--quote marker`.

@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +12,7 @@ import (
 	"github.com/allisonhere/tidemail/internal/config"
 	"github.com/allisonhere/tidemail/internal/db"
 	"github.com/allisonhere/tidemail/internal/mailapp"
+	"github.com/allisonhere/tidemail/internal/smtp"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -21,7 +26,7 @@ func quoteFixture(t *testing.T) (ComposeModel, db.Message) {
 }
 
 // quoteFixtureHTML is quoteFixture with the original's HTML body chosen by the test.
-func quoteFixtureHTML(t *testing.T, bodyHTML string) (ComposeModel, db.Message) {
+func quoteFixtureHTML(t *testing.T, bodyHTML string, parts ...db.Attachment) (ComposeModel, db.Message) {
 	t.Helper()
 	database, err := db.OpenPath(t.TempDir() + "/mail.db")
 	if err != nil {
@@ -32,9 +37,10 @@ func quoteFixtureHTML(t *testing.T, bodyHTML string) (ComposeModel, db.Message) 
 	box, _ := database.UpsertMailbox(db.Mailbox{AccountID: acc, Name: "INBOX"})
 	original := db.Message{
 		MailboxID: box, UID: 1, MessageID: "<orig@x>", Subject: "Budget", From: "Ann Lee <ann@example.com>",
-		Date:     time.Date(2026, 3, 10, 9, 5, 0, 0, time.UTC),
-		BodyText: "Totals\nItem Qty\nPens 3",
-		BodyHTML: bodyHTML,
+		Date:          time.Date(2026, 3, 10, 9, 5, 0, 0, time.UTC),
+		BodyText:      "Totals\nItem Qty\nPens 3",
+		BodyHTML:      bodyHTML,
+		HasAttachment: len(parts) > 0, AttachmentData: parts,
 	}
 	if err := database.UpsertMessage(original); err != nil {
 		t.Fatal(err)
@@ -72,7 +78,7 @@ func TestReplyStartsWithTheMarkerWhenTheSettingIsOn(t *testing.T) {
 func TestSendingResolvesTheMarkerFromTheCachedOriginal(t *testing.T) {
 	c, _ := quoteFixture(t)
 	c.toInput.SetValue("ann@example.com")
-	msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), quoteOption(c.inReplyTo))
+	msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), quoteOptions(c.inReplyTo, false)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,5 +252,87 @@ func TestQuoteViewWrapsLongLinesInsteadOfCuttingThem(t *testing.T) {
 	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}, DefaultKeys)
 	if !strings.Contains(copied, url) {
 		t.Errorf("copy must hand over the unwrapped URL, got %q", copied)
+	}
+}
+
+func uiTestPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, 24, 12))
+	for x := 0; x < 24; x++ {
+		img.SetNRGBA(x, 3, color.NRGBA{uint8(x * 10), 40, 200, 255})
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// The quote's inline images are opt-in per message, with a Settings default (#19).
+func TestQuoteInlineImagesToggleControlsWhatIsSent(t *testing.T) {
+	chart := db.Attachment{Filename: "chart.png", ContentType: "image/png", ContentID: "chart@x", Inline: true, Data: uiTestPNG(t)}
+	c, _ := quoteFixtureHTML(t, `<p>Look: <img src="cid:chart@x" alt="the chart"></p>`, chart)
+	c.toInput.SetValue("ann@example.com")
+	if c.quoteImages {
+		t.Fatal("a message starts with the Settings default, which is off")
+	}
+	send := func(c ComposeModel) smtp.OutgoingMessage {
+		t.Helper()
+		msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), quoteOptions(c.inReplyTo, c.quoteImages)...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return msg
+	}
+	if msg := send(c); len(msg.InlineImages) != 0 || !strings.Contains(msg.HTMLBody, "the chart") {
+		t.Fatalf("off: want alt text only, got %d parts\n%s", len(msg.InlineImages), msg.HTMLBody)
+	}
+	// F10 in the message body switches it on for this message only.
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyF10}, DefaultKeys)
+	if !c.quoteImages || !strings.Contains(c.statusMsg, "included") {
+		t.Fatalf("f10 did not switch it on: %v %q", c.quoteImages, c.statusMsg)
+	}
+	if msg := send(c); len(msg.InlineImages) != 1 || !strings.Contains(msg.HTMLBody, "cid:"+msg.InlineImages[0].ContentID) {
+		t.Fatalf("on: want the image attached and referenced, got %d parts\n%s", len(msg.InlineImages), msg.HTMLBody)
+	}
+	// Inside the F3 view the plain key does the same and the footer says which.
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyF3}, DefaultKeys)
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")}, DefaultKeys)
+	if c.quoteImages || !strings.Contains(ansi.Strip(c.quotePanel(120, newManagerChrome(120, CatppuccinMocha, false))), "quote images off") {
+		t.Errorf("i in the quote view must toggle and show the state: on=%v", c.quoteImages)
+	}
+}
+
+func TestQuoteImagesDefaultComesFromSettingsAndNeedsAMarker(t *testing.T) {
+	c, _ := quoteFixture(t)
+	setComposeQuoteImages(true)
+	t.Cleanup(func() { setComposeQuoteImages(false) })
+	acfg := config.AccountConfig{ID: "a", Name: "Work", User: "me@example.com"}
+	if fresh := NewCompose(acfg, []config.AccountConfig{acfg}, nil); !fresh.quoteImages {
+		t.Error("a new message must start from [display] compose_reply_quote_images")
+	}
+	c.bodyInput.SetValue("no marker here")
+	c.quoteImages = false
+	c, _, _ = c.Update(tea.KeyMsg{Type: tea.KeyF10}, DefaultKeys)
+	if c.quoteImages || !strings.Contains(c.statusMsg, "no quoted-message marker") {
+		t.Errorf("without a marker the key must say so and change nothing: %v %q", c.quoteImages, c.statusMsg)
+	}
+}
+
+func TestQuoteImagesSettingIsOffByDefaultAndSaves(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if cfg.Display.ComposeReplyQuoteImages {
+		t.Fatal("compose_reply_quote_images must start off")
+	}
+	s := newSettings(cfg, settingsUpdateState{})
+	s.setActiveSection(ssEditor)
+	s.setFocusedPane(settingsPaneDetail)
+	s.setFocusedField(sfComposeReplyQuoteImages)
+	on, _, _ := s.Update(tea.KeyMsg{Type: tea.KeySpace}, DefaultKeys)
+	if !on.ApplyTo(cfg).Display.ComposeReplyQuoteImages {
+		t.Fatal("Space must turn it on")
+	}
+	if !newSettings(on.ApplyTo(cfg), settingsUpdateState{}).ApplyTo(config.DefaultConfig()).Display.ComposeReplyQuoteImages {
+		t.Fatal("an enabled setting must be read from config")
 	}
 }

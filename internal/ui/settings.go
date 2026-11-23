@@ -95,6 +95,7 @@ const (
 	sfComposeWordWrap
 	sfComposePreviewServer
 	sfComposeReplyMarker
+	sfComposeReplyQuoteImages
 	sfComposeSpell
 	sfSpellLang
 	sfSpellDictionary
@@ -368,6 +369,7 @@ type Settings struct {
 	composeWordWrap         bool
 	composePreviewServer    bool
 	composeReplyMarker      bool
+	composeReplyQuoteImages bool
 	composeSpell            bool
 	spellLangIdx            int
 	cliQuitAfterSend        bool
@@ -499,6 +501,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		composeWordWrap:         cfg.Display.ComposeWordWrap,
 		composePreviewServer:    cfg.Display.ComposePreviewServer,
 		composeReplyMarker:      cfg.Display.ComposeReplyMarker,
+		composeReplyQuoteImages: cfg.Display.ComposeReplyQuoteImages,
 		composeSpell:            cfg.Display.ComposeSpell,
 		spellLangIdx:            spellLangIndex(cfg.Display.ComposeSpellLang),
 		cliQuitAfterSend:        cfg.Display.CLIQuitAfterSend,
@@ -601,6 +604,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.ComposeWordWrap = s.composeWordWrap
 	cfg.Display.ComposePreviewServer = s.composePreviewServer
 	cfg.Display.ComposeReplyMarker = s.composeReplyMarker
+	cfg.Display.ComposeReplyQuoteImages = s.composeReplyQuoteImages
 	cfg.Display.ComposeSpell = s.composeSpell
 	cfg.Display.ComposeSpellLang = spellLangs[s.spellLangIdx].id
 	cfg.Display.CLIQuitAfterSend = s.cliQuitAfterSend
@@ -863,7 +867,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		// Keep this order in lockstep with the ssGeneral case in viewSectionBody.
 		return []settingsField{sfBackToSections, sfBrowser, sfDownloadDir, sfConfirmQuit, sfNotifications, sfMouseSupport}
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposePreviewServer, sfComposeReplyMarker, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposePreviewServer, sfComposeReplyMarker, sfComposeReplyQuoteImages, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1670,6 +1674,15 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 			s.setFocusedField(s.prevField())
 		}
 
+	case sfComposeReplyQuoteImages:
+		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.composeReplyQuoteImages = !s.composeReplyQuoteImages
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
 	case sfComposeSearchRegex:
 		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.composeSearchRegex = !s.composeSearchRegex
@@ -2220,6 +2233,8 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addFieldHint(sfComposePreviewServer, "F4 shows the draft in your browser and updates it as you type, served from a local port on this machine (127.0.0.1 only, secret address, stops with compose). Off: F4 writes a static file; press F4 again to refresh.")
 		b.addToggle("Reply quote marker", s.composeReplyMarker, sfComposeReplyMarker)
 		b.addFieldHint(sfComposeReplyMarker, "New replies get a \u2051 line standing for the quoted message instead of a pasted \"> \" quote. The original's formatting (tables, lists, links) is kept when sent; move it to reply above, below or between its parts, or delete it to send no quote. Off: replies start with the quote as plain text.")
+		b.addToggle("Quote inline images in replies", s.composeReplyQuoteImages, sfComposeReplyQuoteImages)
+		b.addFieldHint(sfComposeReplyQuoteImages, "Replies with the quote marker also carry the quoted message's inline pictures (logos, charts, screenshots) so they show in the quote. Off: they appear as their alt text. Each message can switch it with F10, or i in the quoted-message view (F3). Needs the picture to be cached and a PNG, JPEG or GIF; at most 5 MB are carried.")
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)
 		b.addFieldHint(sfComposeSearchRegex, "Shows an optional Regex toggle in compose Find. Searches stay literal until you enable it in the search bar.")
 		b.addToggle("Spell check in compose (F7)", s.composeSpell, sfComposeSpell)

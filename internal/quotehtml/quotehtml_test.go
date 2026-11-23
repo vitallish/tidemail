@@ -125,3 +125,28 @@ func TestMarkdownOfATableAndInlineFormatting(t *testing.T) {
 		}
 	}
 }
+
+func TestSanitizeWithResolvesCIDImagesOnlyWhenAsked(t *testing.T) {
+	src := `<p><img src="cid:abc@x" alt="Chart" width="200"> <img src="CID:<gone@x>" alt="Missing"> <img src="cid:pix@x" width="1" height="1"></p>`
+	var asked []string
+	got := SanitizeWith(src, Options{CID: func(id string) (string, bool) {
+		asked = append(asked, id)
+		if id == "abc@x" || id == "pix@x" {
+			return "cid:new-" + id, true
+		}
+		return "", false
+	}})
+	if !strings.Contains(got, `src="cid:new-abc@x"`) || !strings.Contains(got, `width="200"`) {
+		t.Errorf("resolved image missing: %q", got)
+	}
+	if !strings.Contains(got, "Missing") || strings.Count(got, "<img") != 1 {
+		t.Errorf("an unresolvable cid must leave its alt text, and a 1x1 image stays dropped: %q", got)
+	}
+	if strings.Join(asked, ",") != "abc@x,gone@x,pix@x" {
+		t.Errorf("the callback saw %v (brackets and case of the scheme must not matter)", asked)
+	}
+	// Without options nothing changes: the existing policy drops cid images.
+	if plain := Sanitize(src); strings.Contains(plain, "<img") || !strings.Contains(plain, "Chart") {
+		t.Errorf("default policy changed: %q", plain)
+	}
+}

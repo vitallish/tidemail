@@ -156,6 +156,9 @@ func (c ComposeModel) composeStateLine(width int, chrome managerChrome) string {
 			}
 			state = append(state, composeToggleHint(sign, "sign", c.pgpSign, chrome), composeToggleHint(encrypt, "encrypt", c.pgpEncrypt, chrome))
 		}
+		if c.hasQuoteMarker() {
+			state = append(state, composeToggleHint("F10", "quote images", c.quoteImages, chrome))
+		}
 		if c.focusedField == composeFieldBody {
 			// Informational marker only; it does not define a keybinding.
 			marker = base.Foreground(chrome.text).Render("⁂") + base.Foreground(chrome.muted).Render(" sig")

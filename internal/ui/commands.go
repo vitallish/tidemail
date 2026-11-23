@@ -135,6 +135,7 @@ func (m Model) composeCommandItems() []commandItem {
 		{id: "compose-preview", label: "Preview draft in browser", enabled: true},
 		{id: "compose-quote-view", label: "View or copy the quoted message", enabled: m.compose.hasQuoteMarker()},
 		{id: "compose-quote-expand", label: "Expand the quoted message into the text", enabled: m.compose.hasQuoteMarker()},
+		{id: "compose-quote-images", label: pgpToggleLabel("Quote inline images", m.compose.quoteImages), enabled: m.compose.hasQuoteMarker()},
 		{id: "compose-attach", label: "Attach file", enabled: true},
 		{id: "compose-remove-attach", label: "Remove last attachment", enabled: canRemove},
 		{id: "compose-cycle-sender", label: "Change sender", enabled: canCycleSender},
@@ -342,6 +343,9 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "compose-quote-expand":
 		m.compose = m.compose.expandQuote()
+		return m, nil
+	case "compose-quote-images":
+		m.compose = m.compose.toggleQuoteImages()
 		return m, nil
 	case "compose-attach":
 		return m.handleCompose(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f"), Alt: true})

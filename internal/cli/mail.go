@@ -146,7 +146,7 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	fs.SetOutput(errOut)
 	var account, to, cc, bcc, subject, body, file, markdown, templateName, replyTo, quoteMode string
 	var attachments []string
-	var yes, now, j, dry, preview, noSignature, signature, agent, interactive, noInteractive bool
+	var yes, now, j, dry, preview, noSignature, signature, agent, interactive, noInteractive, quoteImages, noQuoteImages bool
 	fs.StringVar(&account, "account", "", "stable account ID or unambiguous name")
 	fs.StringVar(&to, "to", "", "comma-separated recipients")
 	fs.StringVar(&cc, "cc", "", "CC recipients")
@@ -159,6 +159,8 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	fs.StringVar(&templateName, "template", "", "fill the body from a template (see: tidemail templates list)")
 	fs.StringVar(&replyTo, "in-reply-to", "", "thread as a reply to a cached message, for example cache:123 (see messages list)")
 	fs.StringVar(&quoteMode, "quote", "", "with --in-reply-to, also set Re: subject, recipient and quote: marker (the original's HTML at the ⁑ line), text (editable Markdown quote) or none")
+	fs.BoolVar(&quoteImages, "quote-images", false, "with --quote marker, carry the original's inline images into the quote (default: [display] compose_reply_quote_images)")
+	fs.BoolVar(&noQuoteImages, "no-quote-images", false, "with --quote marker, leave the original's inline images out of the quote (alt text only)")
 	fs.Var(stringList(&attachments), "attach", "attachment path, repeatable")
 	fs.BoolVar(&signature, "signature", true, "append configured signature")
 	fs.BoolVar(&noSignature, "no-signature", false, "omit signature")
@@ -277,13 +279,23 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	}
 	d := db.Draft{To: to, CC: cc, BCC: bcc, Subject: subject, BodyText: body, InReplyTo: inReplyTo, References: references}
 	var quoteOpts []mailapp.ComposeOption
+	if quoteImages && noQuoteImages {
+		return fail(2, "invalid_arguments", "--quote-images and --no-quote-images cannot be combined")
+	}
+	if (quoteImages || noQuoteImages) && quoteMode != "marker" {
+		return fail(2, "invalid_arguments", "--quote-images and --no-quote-images need --in-reply-to with --quote marker")
+	}
+	withImages := cfg.Display.ComposeReplyQuoteImages
+	if quoteImages || noQuoteImages {
+		withImages = quoteImages
+	}
 	if quoteMode != "" && replyTo == "" {
 		return fail(2, "invalid_arguments", "--quote needs --in-reply-to")
 	}
 	if quoteMode != "" {
 		var code int
 		var failure *replyError
-		d, quoteOpts, failure = applyReply(d, a, cfg, agent, replyTo, quoteMode, signature && !noSignature)
+		d, quoteOpts, failure = applyReply(d, a, cfg, agent, replyTo, quoteMode, signature && !noSignature, withImages)
 		if failure != nil {
 			code = failure.status
 			return fail(code, failure.code, failure.message)
@@ -505,7 +517,7 @@ func runOutboxAction(args []string, out, errOut io.Writer) int {
 // (--in-reply-to) as a reply to that cached message: "Re:" subject, a default
 // recipient, and the quote as asked (--quote). The returned
 // options let PrepareCompose resolve the quote marker from the cache.
-func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent bool, replyTo, quoteMode string, signature bool) (db.Draft, []mailapp.ComposeOption, *replyError) {
+func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent bool, replyTo, quoteMode string, signature, quoteImages bool) (db.Draft, []mailapp.ComposeOption, *replyError) {
 	if quoteMode != "marker" && quoteMode != "text" && quoteMode != "none" {
 		return d, nil, &replyError{"invalid_arguments", "--quote must be marker, text or none", 2}
 	}
@@ -556,7 +568,18 @@ func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent boo
 			defer lookupDB.Close() //nolint:errcheck
 			return lookupDB.MessageByMessageID(messageID)
 		}
-		return d, []mailapp.ComposeOption{mailapp.WithQuote(d.InReplyTo, lookup)}, nil
+		opts := []mailapp.ComposeOption{mailapp.WithQuote(d.InReplyTo, lookup)}
+		if quoteImages {
+			opts = append(opts, mailapp.WithQuoteImages(func(original db.Message) ([]db.Attachment, error) {
+				partsDB, e := db.Open()
+				if e != nil {
+					return nil, e
+				}
+				defer partsDB.Close() //nolint:errcheck
+				return partsDB.GetImageParts(original.ID)
+			}))
+		}
+		return d, opts, nil
 	case "text":
 		d.BodyText = body + "\n\n" + mailapp.BuildQuote(original).ExpandedMarkdown() + "\n"
 	}

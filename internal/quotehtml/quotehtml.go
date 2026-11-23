@@ -70,7 +70,21 @@ var unsafeCSSValue = regexp.MustCompile(`(?i)url\s*\(|expression|@import|javascr
 // src's body using only the allowlist above. Links keep http, https and mailto
 // targets; images keep only https sources, never 1x1 pixels, and an image that
 // cannot be kept leaves its alt text behind.
-func Sanitize(src string) string {
+func Sanitize(src string) string { return SanitizeWith(src, Options{}) }
+
+// Options changes what Sanitize does with one kind of content.
+type Options struct {
+	// CID resolves an image that points at a part of the same message
+	// (src="cid:..."). It gets the Content-ID without "cid:" and returns the
+	// source to write instead, for example a cid: URL of a part the caller has
+	// attached to the outgoing message. Returning false leaves the alt text, as
+	// when CID is nil. The returned source is trusted: only the caller can make
+	// it point anywhere, and it is not checked against the https rule.
+	CID func(contentID string) (src string, ok bool)
+}
+
+// SanitizeWith is Sanitize with the options applied.
+func SanitizeWith(src string, opts Options) string {
 	doc, err := html.Parse(strings.NewReader(src))
 	if err != nil {
 		return ""
@@ -81,7 +95,7 @@ func Sanitize(src string) string {
 	}
 	out := &html.Node{Type: html.ElementNode, DataAtom: atom.Div, Data: "div"}
 	for c := body.FirstChild; c != nil; c = c.NextSibling {
-		clean(c, out)
+		clean(c, out, opts)
 	}
 	var buf bytes.Buffer
 	for c := out.FirstChild; c != nil; c = c.NextSibling {
@@ -103,7 +117,7 @@ func findBody(n *html.Node) *html.Node {
 }
 
 // clean copies n into parent according to the allowlist.
-func clean(n, parent *html.Node) {
+func clean(n, parent *html.Node, opts Options) {
 	switch n.Type {
 	case html.TextNode:
 		parent.AppendChild(&html.Node{Type: html.TextNode, Data: n.Data})
@@ -116,7 +130,7 @@ func clean(n, parent *html.Node) {
 		return
 	}
 	if n.DataAtom == atom.Img {
-		if img := cleanImage(n); img != nil {
+		if img := cleanImage(n, opts); img != nil {
 			parent.AppendChild(img)
 		} else if alt := strings.TrimSpace(attr(n, "alt")); alt != "" {
 			parent.AppendChild(&html.Node{Type: html.TextNode, Data: alt})
@@ -138,7 +152,7 @@ func clean(n, parent *html.Node) {
 		}
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		clean(c, target)
+		clean(c, target, opts)
 	}
 }
 
@@ -204,9 +218,15 @@ func cleanStyle(style string) string {
 	return strings.Join(kept, "; ")
 }
 
-// cleanImage keeps an https image that is not a tracking pixel, or returns nil.
-func cleanImage(n *html.Node) *html.Node {
+// cleanImage keeps an https image that is not a tracking pixel, or a cid image
+// the caller agrees to resolve, or returns nil.
+func cleanImage(n *html.Node, opts Options) *html.Node {
 	src := safeURL(attr(n, "src"), "https")
+	if raw := strings.TrimSpace(attr(n, "src")); src == "" && opts.CID != nil && len(raw) > 4 && strings.EqualFold(raw[:4], "cid:") {
+		if resolved, ok := opts.CID(strings.Trim(raw[4:], "<> ")); ok {
+			src = resolved
+		}
+	}
 	if src == "" || isPixel(n) {
 		return nil
 	}

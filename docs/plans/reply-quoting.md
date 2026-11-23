@@ -59,7 +59,10 @@ Issue: vitallish/tidemail #4 (keep HTML structure when quoting). Written
 4. **Images in the quote** (recommended by me after comparing with what Gmail does;
    the owner asked, not yet confirmed): keep remote `https` images, drop `http`
    images and 1x1 pixels, drop inline (`cid:`) images keeping their alt text;
-   re-embedding inline images is a follow-up.
+   re-embedding inline images is a follow-up (done in #19: opt-in per message with
+   a Settings default; `quotehtml.SanitizeWith` resolves cid images through the
+   send-time image resolver, `inlineimg.EmbedQuoteImage` carries them under a 5 MB
+   quote budget, unsupported or missing parts keep their alt text).
 
 ## Amendments made while building (2026-11-12)
 - **Setting is a toggle, not a picker:** `[display] compose_reply_marker = true|false`

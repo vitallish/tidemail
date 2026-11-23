@@ -152,7 +152,7 @@ func composeBody(body, signature, signatureHTML string, opts composeOptions, ima
 		}
 		var quote *Quote
 		if hasQuote {
-			if quote, err = opts.resolveQuote(); err != nil {
+			if quote, err = opts.resolveQuote(images); err != nil {
 				return "", "", err
 			}
 		}

@@ -113,6 +113,7 @@ type ComposeModel struct {
 	// user added to their dictionary; the model persists and clears them.
 	spellOpen    bool
 	quoteOpen    bool   // the read-only view of the quoted message is showing
+	quoteImages  bool   // the quote carries the original's inline images (per message; starts from the Settings default)
 	quoteTop     int    // first visible line
 	quoteText    string // the text copied by y
 	expandedFrom string // the body before the last quote expansion, for one Ctrl+Z
@@ -168,7 +169,7 @@ type ComposeModel struct {
 }
 
 func NewCompose(acfg config.AccountConfig, accounts []config.AccountConfig, addressBook []string) ComposeModel {
-	c := ComposeModel{accountCfg: acfg, accounts: accounts}
+	c := ComposeModel{accountCfg: acfg, accounts: accounts, quoteImages: composeQuoteImages}
 	if len(accounts) > 1 {
 		// Find the given acfg in the list; default to 0 if not found. Match on
 		// the stable ID first: two accounts can share a host and login (an
@@ -870,6 +871,13 @@ func (c ComposeModel) Update(msg tea.Msg, keys KeyMap) (ComposeModel, tea.Cmd, b
 	case keyMatches(km, keys.ViewQuote):
 		return c.openQuoteView(), nil, false
 
+	case keyMatches(km, keys.ToggleQuoteImages):
+		if !c.hasQuoteMarker() {
+			c.statusMsg, c.isErr = "no quoted-message marker in this message", false
+			return c, nil, false
+		}
+		return c.toggleQuoteImages(), nil, false
+
 	case keyMatches(km, keys.SpellCheck):
 		c.openSpell()
 		return c, nil, false
@@ -1363,7 +1371,7 @@ func (c ComposeModel) send() (ComposeModel, tea.Cmd, bool) {
 	}
 	acfg := c.selectedAccount()
 
-	msg, err := mailapp.PrepareCompose(acfg, c.toDraftRecord(), quoteOption(c.inReplyTo))
+	msg, err := mailapp.PrepareCompose(acfg, c.toDraftRecord(), quoteOptions(c.inReplyTo, c.quoteImages)...)
 	if err != nil {
 		c.statusMsg = err.Error()
 		c.isErr = true
