@@ -107,7 +107,7 @@ func TestQuoteMarkerMisuseIsRefused(t *testing.T) {
 	}
 	// Not a reply: nothing to quote, said plainly.
 	_, err := PrepareCompose(quoteAccount, db.Draft{To: "a@example.com", BodyText: "⁑"})
-	if err == nil || !strings.Contains(err.Error(), "not a reply") {
+	if err == nil || !strings.Contains(err.Error(), "neither a reply nor a forward") {
 		t.Errorf("no reply context: %v", err)
 	}
 	// The original left the cache.

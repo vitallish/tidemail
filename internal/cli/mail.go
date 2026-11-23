@@ -144,7 +144,7 @@ func mailResult(out, errOut io.Writer, j bool, data any, code int, id, message s
 func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.Writer) int {
 	fs := flag.NewFlagSet("send", flag.ContinueOnError)
 	fs.SetOutput(errOut)
-	var account, to, cc, bcc, subject, body, file, markdown, templateName, replyTo, quoteMode string
+	var account, to, cc, bcc, subject, body, file, markdown, templateName, replyTo, forwardID, quoteMode string
 	var attachments []string
 	var yes, now, j, dry, preview, noSignature, signature, agent, interactive, noInteractive, quoteImages, noQuoteImages bool
 	fs.StringVar(&account, "account", "", "stable account ID or unambiguous name")
@@ -158,6 +158,7 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 	fs.StringVar(&markdown, "markdown", "", "Markdown body file")
 	fs.StringVar(&templateName, "template", "", "fill the body from a template (see: tidemail templates list)")
 	fs.StringVar(&replyTo, "in-reply-to", "", "thread as a reply to a cached message, for example cache:123 (see messages list)")
+	fs.StringVar(&forwardID, "forward", "", "forward a cached message, for example cache:123 (see messages list): Fwd: subject, its attachments, and the original quoted as --quote says (default marker); you give the recipient")
 	fs.StringVar(&quoteMode, "quote", "", "with --in-reply-to, also set Re: subject, recipient and quote: marker (the original's HTML at the ⁑ line), text (editable Markdown quote) or none")
 	fs.BoolVar(&quoteImages, "quote-images", false, "with --quote marker, carry the original's inline images into the quote (default: [display] compose_reply_quote_images)")
 	fs.BoolVar(&noQuoteImages, "no-quote-images", false, "with --quote marker, leave the original's inline images out of the quote (alt text only)")
@@ -267,6 +268,12 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 			subject = mailtemplate.Fill(t.Subject, vars)
 		}
 	}
+	if forwardID != "" && replyTo != "" {
+		return fail(2, "invalid_arguments", "--forward and --in-reply-to cannot be combined: a forward is not threaded into the original's conversation")
+	}
+	if forwardID != "" && quoteMode == "" {
+		quoteMode = "marker"
+	}
 	var inReplyTo, references string
 	if replyTo != "" {
 		if agent && !mailapp.Allowed(cfg, "messages.metadata") {
@@ -284,19 +291,23 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 		return fail(2, "invalid_arguments", "--quote-images and --no-quote-images cannot be combined")
 	}
 	if (quoteImages || noQuoteImages) && quoteMode != "marker" {
-		return fail(2, "invalid_arguments", "--quote-images and --no-quote-images need --in-reply-to with --quote marker")
+		return fail(2, "invalid_arguments", "--quote-images and --no-quote-images need --in-reply-to or --forward with --quote marker")
 	}
 	withImages := cfg.Display.ComposeReplyQuoteImages
 	if quoteImages || noQuoteImages {
 		withImages = quoteImages
 	}
-	if quoteMode != "" && replyTo == "" {
-		return fail(2, "invalid_arguments", "--quote needs --in-reply-to")
+	if quoteMode != "" && replyTo == "" && forwardID == "" {
+		return fail(2, "invalid_arguments", "--quote needs --in-reply-to or --forward")
 	}
 	if quoteMode != "" {
 		var code int
 		var failure *replyError
-		d, quoteOpts, failure = applyReply(d, a, cfg, agent, replyTo, quoteMode, signature && !noSignature, withImages)
+		if forwardID != "" {
+			d, quoteOpts, failure = applyForward(d, cfg, agent, forwardID, quoteMode, signature && !noSignature, withImages)
+		} else {
+			d, quoteOpts, failure = applyReply(d, a, cfg, agent, replyTo, quoteMode, signature && !noSignature, withImages)
+		}
 		if failure != nil {
 			code = failure.status
 			return fail(code, failure.code, failure.message)
@@ -311,7 +322,8 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 		d.Attachments = append(d.Attachments, att)
 	}
 	auto := !noInteractive && !yes && !j && !agent && !dry && terminalIO(in, out) && (strings.TrimSpace(to) == "" || strings.TrimSpace(subject) == "" || (strings.TrimSpace(body) == "" && len(attachments) == 0))
-	if replyTo != "" && quoteMode == "marker" && (interactive || preview || auto) {
+	markerQuote := (replyTo != "" || forwardID != "") && quoteMode == "marker"
+	if markerQuote && (interactive || preview || auto) {
 		return fail(2, "invalid_arguments", "the interactive wizard does not resolve the quote marker; use --quote text, or pass --to, --subject and a body")
 	}
 	if interactive || preview || auto {
@@ -324,7 +336,7 @@ func runComposeCLI(draftOnly bool, args []string, in io.Reader, out, errOut io.W
 		return composeInteractive(cfg, a, d, cliform.ComposeOptions{DraftOnly: draftOnly, DryRun: dry, SendNow: now, Signature: wizardSignature, Agent: agent, SkipReview: cfg.Display.CLISkipReview}, out, errOut, j)
 	}
 	var msg smtp.OutgoingMessage
-	if replyTo != "" && quoteMode == "marker" {
+	if markerQuote {
 		// The body carries the quote marker, resolved from the cache like the
 		// composer does; the signature is the ⁂ marker applyReply put there.
 		msg, err = mailapp.PrepareCompose(a, d, quoteOpts...)
@@ -572,14 +584,7 @@ func applyReply(d db.Draft, a config.AccountConfig, cfg config.Config, agent boo
 		}
 		opts := []mailapp.ComposeOption{mailapp.WithQuote(d.InReplyTo, lookup)}
 		if quoteImages {
-			opts = append(opts, mailapp.WithQuoteImages(func(original db.Message) ([]db.Attachment, error) {
-				partsDB, e := db.Open()
-				if e != nil {
-					return nil, e
-				}
-				defer partsDB.Close() //nolint:errcheck
-				return partsDB.GetImageParts(original.ID)
-			}))
+			opts = append(opts, mailapp.WithQuoteImages(quoteImageLoader))
 		}
 		return d, opts, nil
 	case "text":

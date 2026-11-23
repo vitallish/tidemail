@@ -29,6 +29,9 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft, opts ...Compos
 	o := applyOptions(opts)
 	if o.replyTo == "" {
 		o.replyTo = draft.InReplyTo
+		if o.replyTo == "" && draft.ForwardOf != "" {
+			o.replyTo, o.forward = draft.ForwardOf, true
+		}
 	}
 	sigHTML, err := signatureHTMLFor(account)
 	if err != nil {

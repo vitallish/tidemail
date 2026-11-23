@@ -78,7 +78,7 @@ func TestReplyStartsWithTheMarkerWhenTheSettingIsOn(t *testing.T) {
 func TestSendingResolvesTheMarkerFromTheCachedOriginal(t *testing.T) {
 	c, _ := quoteFixture(t)
 	c.toInput.SetValue("ann@example.com")
-	msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), quoteOptions(c.inReplyTo, false)...)
+	msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), c.quoteOptions()...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestQuoteInlineImagesToggleControlsWhatIsSent(t *testing.T) {
 	}
 	send := func(c ComposeModel) smtp.OutgoingMessage {
 		t.Helper()
-		msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), quoteOptions(c.inReplyTo, c.quoteImages)...)
+		msg, err := mailapp.PrepareCompose(c.selectedAccount(), c.toDraftRecord(), c.quoteOptions()...)
 		if err != nil {
 			t.Fatal(err)
 		}

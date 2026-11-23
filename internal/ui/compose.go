@@ -97,6 +97,7 @@ type ComposeModel struct {
 	maximized    bool // Session-only; every new composer starts compact.
 	focusedField composeField
 	inReplyTo    string
+	forwardOf    string // Message-ID of the message a forward carries, for its quote marker (not In-Reply-To)
 	references   string
 	isForward    bool // distinguishes a forward from a plain compose (no inReplyTo)
 	accountCfg   config.AccountConfig
@@ -270,6 +271,9 @@ func NewComposeFromDraft(draft db.Draft, accounts []config.AccountConfig, addres
 	c.subjectInput.SetValue(draft.Subject)
 	c.bodyInput.SetValue(draft.BodyText)
 	c.inReplyTo = draft.InReplyTo
+	if c.forwardOf = draft.ForwardOf; c.forwardOf != "" {
+		c.isForward = true
+	}
 	c.references = draft.References
 	c.dirty = false
 	for _, att := range draft.Attachments {
@@ -412,7 +416,14 @@ func NewForward(original db.Message, acfg config.AccountConfig, accounts []confi
 
 	// Quote the original body text with a forward header
 	if plain := quotableText(original); plain != "" {
-		c.setInitialBody("", quoteForward(plain, original))
+		if composeReplyMarker && strings.TrimSpace(original.MessageID) != "" {
+			// The same marker as a reply: the forwarded message, with its
+			// formatting, is put at the ⁑ line when the message is previewed or sent.
+			c.forwardOf = original.MessageID
+			c.setInitialBody("", "\n\n"+mailapp.QuoteMarker+"\n")
+		} else {
+			c.setInitialBody("", quoteForward(plain, original))
+		}
 		c.moveBodyCursorToStart()
 	}
 
@@ -1328,6 +1339,7 @@ func (c ComposeModel) toDraftRecord() db.Draft {
 		Subject:         c.subjectInput.Value(),
 		BodyText:        c.bodyInput.Value(),
 		InReplyTo:       c.inReplyTo,
+		ForwardOf:       c.forwardOf,
 		References:      c.references,
 		Dirty:           true,
 	}
@@ -1374,7 +1386,7 @@ func (c ComposeModel) send() (ComposeModel, tea.Cmd, bool) {
 	}
 	acfg := c.selectedAccount()
 
-	msg, err := mailapp.PrepareCompose(acfg, c.toDraftRecord(), quoteOptions(c.inReplyTo, c.quoteImages)...)
+	msg, err := mailapp.PrepareCompose(acfg, c.toDraftRecord(), c.quoteOptions()...)
 	if err != nil {
 		c.statusMsg = err.Error()
 		c.isErr = true

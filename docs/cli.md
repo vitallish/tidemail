@@ -65,7 +65,8 @@ nonempty body or an attachment. Incomplete messages cannot authorize delivery.
 | `--template NAME` | Fill the body from a template (case-insensitive name; see below). One body source only; `--subject` overrides the template's subject |
 | `--attach PATH` | Add a file, repeatable |
 | `--in-reply-to cache:ID` | Thread the message as a reply to a cached message, using the ID from `messages list`. Sets In-Reply-To and References; recipients and subject are still yours to give |
-| `--quote marker\|text\|none` | With `--in-reply-to`: also set the `Re:` subject, the recipient and the quote (see "Replying from the command line") |
+| `--quote marker\|text\|none` | With `--in-reply-to`: also set the `Re:` subject, the recipient and the quote; with `--forward`: how the original is quoted (see "Replying from the command line") |
+| `--forward cache:ID` | Forward a cached message: `Fwd:` subject, its attachments, no threading, the original quoted as `--quote` says (default `marker`). The recipient is yours to give. Not with `--in-reply-to` |
 | `--quote-images`, `--no-quote-images` | With `--quote marker`: carry the original's inline images into the quote, or leave them as alt text. Default: `[display] compose_reply_quote_images` (off) |
 | `--signature` | Append the configured account signature, enabled by default |
 | `--no-signature` | Omit the configured signature |
@@ -164,6 +165,25 @@ tidemail send --in-reply-to cache:123 --quote text --body-file answer.md --dry-r
 budget stays as alt text and never fails the command.
 Agents need `messages.read` as well as `drafts.create`, because the reply copies
 the original's body.
+
+### Forwarding
+
+`--forward cache:ID` forwards a cached message the way the composer does. The
+subject defaults to `Fwd: …`, the original's cached attachments are attached,
+and the draft remembers what it forwards (so it is not threaded into the
+original's conversation, and a draft opened in the composer resolves its quote).
+`--quote` works as for replies, with a forwarded-message header block (From,
+Date, Subject, To, CC) in place of "wrote:": `marker` is the default (the
+original's formatting is kept and resolved when the message is built), `text`
+copies it into the body as a `> ` Markdown quote, `none` quotes nothing.
+`--quote-images` applies to `--quote marker` here too. `--forward` and
+`--in-reply-to` cannot be combined, and you give the recipient. Agents need
+`messages.read`, because a forward copies the original's body and attachments.
+
+```bash
+tidemail send --forward cache:123 --to bob@example.com --body "FYI" --dry-run --json
+tidemail draft create --forward cache:123 --quote text --to bob@example.com --body "See below" --json
+```
 
 ## Cached inbox reads
 
