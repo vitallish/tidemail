@@ -219,7 +219,7 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 			m.setStatus("reply failed: "+err.Error(), true)
 			return m, m.clearStatusCmd()
 		}
-		m.compose = NewReply(*msg, acfg, m.cfg.Accounts, m.addressBook)
+		m.compose = focusReplyBody(NewReply(*msg, acfg, m.cfg.Accounts, m.addressBook), m.cfg.Display.ReplyFocusBody)
 		m.overlay = overlayCompose
 		return m, nil
 	case "reply-all":
@@ -232,7 +232,7 @@ func (m Model) executeCommand(id string) (tea.Model, tea.Cmd) {
 			m.setStatus("reply all failed: "+err.Error(), true)
 			return m, m.clearStatusCmd()
 		}
-		m.compose = NewReplyAll(*msg, acfg, m.cfg.Accounts, m.addressBook)
+		m.compose = focusReplyBody(NewReplyAll(*msg, acfg, m.cfg.Accounts, m.addressBook), m.cfg.Display.ReplyFocusBody)
 		m.overlay = overlayCompose
 		return m, nil
 	case "forward":

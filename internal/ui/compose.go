@@ -311,6 +311,17 @@ func formatAddressField(raw string) string {
 	return strings.Join(out, ", ")
 }
 
+// focusReplyBody moves a freshly built reply into the body when the user has
+// asked for that (reply_focus_body). Replies already have To and Subject
+// filled in, so the caret belongs under them. Forward is not routed here: it
+// starts empty at To.
+func focusReplyBody(c ComposeModel, enabled bool) ComposeModel {
+	if enabled {
+		c.focusBodyAtStart()
+	}
+	return c
+}
+
 // NewReplyAll is NewReply plus the original's other recipients on Cc. To is
 // the Reply-To (or From); Cc is the original To and Cc minus every address
 // that belongs to one of the configured accounts and minus anyone already in
