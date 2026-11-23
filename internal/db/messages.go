@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/allisonhere/tidemail/internal/mailtag"
+	"github.com/allisonhere/tidemail/internal/searchquery"
 )
 
 type Message struct {
@@ -171,9 +171,8 @@ func (db *DB) SearchAllMessagesPage(query string, unreadOnly bool, limit, offset
 }
 
 func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limit, offset int) ([]Message, int, error) {
-	terms := ParseSearch(query)
-	match := searchMatch(terms)
-	if match == "" && len(terms.Tags) == 0 {
+	compiled := compileSearch(searchquery.Parse(query, time.Now()))
+	if compiled.empty() {
 		return nil, 0, nil
 	}
 	const columns = `messages.id, messages.mailbox_id, messages.uid, messages.message_id,
@@ -184,28 +183,14 @@ func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limi
 	const joins = `
 		JOIN mailboxes ON mailboxes.id = messages.mailbox_id
 		JOIN accounts ON accounts.id = mailboxes.account_id`
-	var where []string
-	var args []any
+	where, args := compiled.where, compiled.args
 	from := "messages"
 	orderBy := "messages.date DESC, messages.id DESC"
-	if match != "" {
+	if compiled.match != "" {
 		from = "messages_fts JOIN messages ON messages.id = messages_fts.rowid"
-		where = append(where, "messages_fts MATCH ?")
-		args = append(args, match)
+		where = append([]string{"messages_fts MATCH ?"}, where...)
+		args = append([]any{compiled.match}, args...)
 		orderBy = "bm25(messages_fts), " + orderBy
-	}
-	// FTS phrases match a token run anywhere, so a complete address also needs
-	// an end-anchored check or to:work@example.com finds work@example.com.au.
-	for _, f := range terms.Fields {
-		if expr, exactArgs := exactAddressWhere(f); expr != "" {
-			where = append(where, expr)
-			args = append(args, exactArgs...)
-		}
-	}
-	if len(terms.Tags) > 0 {
-		expr, tagArgs := tagsWhere(terms.Tags)
-		where = append(where, expr)
-		args = append(args, tagArgs...)
 	}
 	if unreadOnly {
 		where = append(where, "messages.read = 0")
@@ -546,90 +531,6 @@ func scanMessagesWithContext(rows interface {
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
-}
-
-// ftsQuery turns what the user typed into an FTS5 MATCH expression. Terms are
-// quoted (so punctuation in an address can't be read as FTS operators) and
-// ANDed together.
-//
-// The final term also gets the prefix operator, because search runs on every
-// keystroke: without it a half-typed word matches no token at all, so results
-// vanish mid-word and only reappear once the word is finished. Only the last
-// term is treated this way — earlier terms are complete words the user has
-// already moved past.
-// searchMatch is the full-text MATCH expression for free words and field
-// operators, ANDed together; "" when there is nothing to match. The last thing
-// typed is matched as a prefix, so results follow the user while they type.
-func searchMatch(terms SearchTerms) string {
-	var parts []string
-	if text := ftsQueryPrefix(terms.Text, !terms.LastIsField); text != "" {
-		parts = append(parts, text)
-	}
-	for _, f := range terms.Fields {
-		if !strings.ContainsFunc(f.Value, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
-			continue // nothing the tokenizer would index, e.g. "to:@"
-		}
-		phrase := `"` + strings.ReplaceAll(f.Value, `"`, `""`) + `"`
-		if f.Prefix {
-			phrase += "*"
-		}
-		parts = append(parts, "{"+strings.Join(f.Columns, " ")+"} : "+phrase)
-	}
-	return strings.Join(parts, " AND ")
-}
-
-// addressSeparators are the characters that delimit one address from the next
-// (or from its display name) in a stored header value.
-var addressSeparators = []string{"<", ">", ",", ";", `"`, "(", ")", "\t", "\n", "\r"}
-
-// exactAddressWhere restricts a complete-address operator (to:a@b.com) to rows
-// where that address appears as a whole address in one of the columns, not as a
-// prefix of a longer one. It returns "" for terms that are not a complete
-// address or that are still being typed.
-func exactAddressWhere(f FieldTerm) (string, []any) {
-	if f.Prefix || !completeAddress(f.Value) {
-		return "", nil
-	}
-	want := " " + strings.ToLower(f.Value) + " "
-	var exprs []string
-	var args []any
-	for _, col := range f.Columns {
-		norm := "lower(messages." + col + ")"
-		for _, sep := range addressSeparators {
-			switch sep {
-			case "\t", "\n", "\r":
-				norm = "replace(" + norm + ", char(" + map[string]string{"\t": "9", "\n": "10", "\r": "13"}[sep] + "), ' ')"
-			default:
-				norm = "replace(" + norm + ", '" + sep + "', ' ')"
-			}
-		}
-		exprs = append(exprs, "instr(' ' || "+norm+" || ' ', ?) > 0")
-		args = append(args, want)
-	}
-	return "(" + strings.Join(exprs, " OR ") + ")", args
-}
-
-// ftsQueryPrefix is ftsQuery with the prefix match on the last word optional.
-func ftsQueryPrefix(query string, prefixLast bool) string {
-	parts := strings.Fields(strings.TrimSpace(query))
-	if len(parts) == 0 {
-		return ""
-	}
-	quoted := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.ReplaceAll(part, `"`, `""`)
-		if part == "" {
-			continue
-		}
-		quoted = append(quoted, `"`+part+`"`)
-	}
-	if len(quoted) == 0 {
-		return ""
-	}
-	if prefixLast {
-		quoted[len(quoted)-1] += "*"
-	}
-	return strings.Join(quoted, " AND ")
 }
 
 func upsertMessageFTS(x execer, id int64) error {
