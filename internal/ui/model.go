@@ -2068,6 +2068,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.compose.dirty = true
 		m.setComposeStatus(status, false)
 		return m, nil
+
 	case AttachmentOpenedMsg:
 		text, isErr := attachmentOpenedStatus(msg)
 		m.setStatus(text, isErr)

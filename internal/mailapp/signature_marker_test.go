@@ -314,6 +314,9 @@ func TestComposeStyledTableInRealisticMessage(t *testing.T) {
 	}
 	if strings.Contains(h, "<style") {
 		t.Fatalf("styling must be inline, found a <style> block:\n%s", h)
+	}
+}
+
 // The preview and sending share composeBody; this pins that ComposeHTML stays
 // identical to the HTML part PrepareCompose produces, with and without a marker.
 func TestComposeHTMLMatchesPrepareCompose(t *testing.T) {
