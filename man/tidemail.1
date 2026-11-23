@@ -36,8 +36,12 @@ Validate a message and save it as a draft, or queue it with
 .B draft create
 Save a draft; it never authorizes delivery.
 .TP
-.B messages list | search | read
+.B messages list | search | read | attachments | open
 Read the cached mail.
+.B attachments
+numbers the openable attachments of one message and
+.B open \-\-attachment N
+opens one with the default program (agents need the attachments.open capability).
 .B list
 and
 .B search

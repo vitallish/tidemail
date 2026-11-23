@@ -143,6 +143,13 @@ All notable changes to TideMail are documented in this file.
 - `reply_focus_body` in `[display]` (also **Settings → Editor → Reply opens in the
   body**): reply and reply all open with the caret in the message body, above the
   quote, instead of on the first header field. Off by default; forward is unchanged.
+- Press `w` in the reader to open one attachment of the message with your default
+  program, instead of saving them all with `Ctrl+D`. One attachment opens at once;
+  several show a list. A private temporary copy is made (owner-only, deleted after
+  24 hours); `attachment_open_cmd` in `[display]` chooses another program, with
+  `{file}` for the path. Also in the command palette, and on the command line as
+  `messages attachments ID` and `messages open ID --attachment N`, which an agent
+  may run only with the new `attachments.open` capability.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret

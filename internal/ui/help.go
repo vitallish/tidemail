@@ -143,6 +143,7 @@ func helpSections(keys KeyMap) []helpSection {
 				{keys.OpenInBrowser.Help().Key, "view the whole message in your browser, remote content blocked; press again to load images (also from the message list)"},
 				{keys.EditTags.Help().Key, "correct this message's classification and manage its tags"},
 				{keys.SaveAttach.Help().Key, "save all attachments to folder"},
+				{keys.OpenAttach.Help().Key, "open one attachment with your default program (a list when there are several)"},
 				{keys.ToggleImages.Help().Key, "load remote images (unsupported in foot/WezTerm)"},
 				{keys.TrustImages.Help().Key, "always load remote images from this sender (press again to stop)"},
 				{keys.ToggleQuote.Help().Key, "toggle quoted text collapse"},
