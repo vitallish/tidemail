@@ -27,6 +27,13 @@ var (
 // no network requests when it opens the export. Links are preserved. blocked
 // counts the remote images that were dropped.
 func sanitizeEmailHTML(src string, allowImages bool) (out string, blocked int, err error) {
+	return sanitizeEmailHTMLWith(src, allowImages, nil)
+}
+
+// sanitizeEmailHTMLWith is sanitizeEmailHTML that first replaces each cid:
+// reference by the data: URI embed returns for it (nil leaves them alone). The
+// replacement happens before the stripping, which keeps data: sources.
+func sanitizeEmailHTMLWith(src string, allowImages bool, embed cidEmbedder) (out string, blocked int, err error) {
 	doc, err := html.Parse(strings.NewReader(src))
 	if err != nil {
 		return "", 0, err
@@ -55,10 +62,11 @@ func sanitizeEmailHTML(src string, allowImages bool) (out string, blocked int, e
 				case atom.Style:
 					for t := c.FirstChild; t != nil; t = t.NextSibling {
 						if t.Type == html.TextNode {
-							t.Data = stripCSSRemote(t.Data, allowImages)
+							t.Data = stripCSSRemote(embedCSSCIDs(t.Data, embed), allowImages)
 						}
 					}
 				}
+				embedCIDAttrs(c, embed)
 				blocked += stripRemoteAttrs(c, allowImages)
 			}
 			walk(c)
@@ -155,4 +163,42 @@ func stripCSSRemote(css string, allowImages bool) string {
 		}
 		return "none"
 	})
+}
+
+// cidEmbedder turns a cid: reference's id into a data: URI; ok is false when the
+// message has no usable image for it.
+type cidEmbedder func(contentID string) (dataURI string, ok bool)
+
+var cssCID = regexp.MustCompile(`(?i)url\(\s*["']?\s*cid:([^"')\s]+)\s*["']?\s*\)`)
+
+// embedCSSCIDs replaces url(cid:...) in css.
+func embedCSSCIDs(css string, embed cidEmbedder) string {
+	if embed == nil {
+		return css
+	}
+	return cssCID.ReplaceAllStringFunc(css, func(m string) string {
+		if uri, ok := embed(cssCID.FindStringSubmatch(m)[1]); ok {
+			return `url("` + uri + `")`
+		}
+		return m
+	})
+}
+
+// embedCIDAttrs replaces cid: image sources on n, and cid: urls in its style.
+func embedCIDAttrs(n *html.Node, embed cidEmbedder) {
+	if embed == nil {
+		return
+	}
+	for i, a := range n.Attr {
+		switch key := strings.ToLower(a.Key); {
+		case (key == "src" && (n.DataAtom == atom.Img || n.DataAtom == atom.Input)) || key == "background":
+			if val := strings.TrimSpace(a.Val); len(val) > 4 && strings.EqualFold(val[:4], "cid:") {
+				if uri, found := embed(val[4:]); found {
+					n.Attr[i].Val = uri
+				}
+			}
+		case key == "style":
+			n.Attr[i].Val = embedCSSCIDs(a.Val, embed)
+		}
+	}
 }

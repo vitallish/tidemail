@@ -1,6 +1,7 @@
 package imap
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -548,5 +549,20 @@ func TestParseBody_NonUTF8Unaffected(t *testing.T) {
 	}
 	if len(atts) != 0 {
 		t.Errorf("expected no attachments, got %d", len(atts))
+	}
+}
+
+func TestExtractHTMLWithImagesReturnsOnlyImagePartsWithContentID(t *testing.T) {
+	raw := []byte("MIME-Version: 1.0\r\nContent-Type: multipart/related; boundary=r\r\n\r\n" +
+		"--r\r\nContent-Type: text/html\r\n\r\n<img src=\"cid:a@x\">\r\n" +
+		"--r\r\nContent-Type: image/PNG\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <a@x>\r\n\r\niVBORw0K\r\n" +
+		"--r\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\n\r\niVBORw0K\r\n" +
+		"--r\r\nContent-Type: application/pdf\r\nContent-ID: <p@x>\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0K\r\n--r--\r\n")
+	html, images := ExtractHTMLWithImages(raw)
+	if !strings.Contains(html, "cid:a@x") || len(images) != 1 || images[0].ContentID != "a@x" || images[0].ContentType != "image/png" || len(images[0].Data) == 0 {
+		t.Fatalf("html=%q images=%+v", html, images)
+	}
+	if only := ExtractHTML(raw); only != html {
+		t.Error("ExtractHTML must be unchanged")
 	}
 }

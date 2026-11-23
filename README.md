@@ -423,7 +423,7 @@ opening a message does not load tracking pixels: remote images, scripts, frames,
 stylesheets, and web fonts are left out, and the status line reports how many
 remote images were dropped. Press `Ctrl+B` again right away to reopen the message
 with remote images loaded; this tells the sender the message was opened, so it only
-happens when you ask. Embedded CID images are not exported. Exports are
+happens when you ask. The message's own inline (CID) images (PNG, JPEG, GIF, WebP, BMP; up to 10 MB each and 25 MB in all) are embedded in the file and shown at once, since they make no network request; one that can't be shown is counted in the status line. Exports are
 written to a private per-user folder in the system temporary directory and
 deleted automatically after an hour (older ones are also pruned when TideMail
 starts).

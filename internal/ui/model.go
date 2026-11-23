@@ -2014,11 +2014,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setStatus("View in browser: "+msg.err.Error(), true)
 		case msg.blocked > 0:
 			m.browserReopen = msg.msgID
-			m.setStatus(fmt.Sprintf("opened in browser, %d remote images blocked — %s again to load them", msg.blocked, m.keyHint(m.keys.OpenInBrowser)), false)
+			m.setStatus(fmt.Sprintf("opened in browser, %d remote images blocked — %s again to load them%s", msg.blocked, m.keyHint(m.keys.OpenInBrowser), missingInlineNote(msg.missing)), false)
 		case msg.images:
-			m.setStatus("opened in browser (images loaded)", false)
+			m.setStatus("opened in browser (images loaded)"+missingInlineNote(msg.missing), false)
 		default:
-			m.setStatus("opened in browser", false)
+			m.setStatus("opened in browser"+missingInlineNote(msg.missing), false)
 		}
 		return m, m.clearStatusCmd()
 
