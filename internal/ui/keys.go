@@ -94,15 +94,16 @@ type KeyMap struct {
 	IndentFolder    key.Binding
 	OutdentFolder   key.Binding
 
-	MaximizeCompose key.Binding
-	AttachFile      key.Binding
-	RemoveAttach    key.Binding
-	CycleSender     key.Binding
-	GrammarCheck    key.Binding
-	SpellCheck      key.Binding
-	PreviewDraft    key.Binding
-	ViewQuote       key.Binding
-	Templates       key.Binding
+	MaximizeCompose   key.Binding
+	AttachFile        key.Binding
+	RemoveAttach      key.Binding
+	CycleSender       key.Binding
+	GrammarCheck      key.Binding
+	SpellCheck        key.Binding
+	PreviewDraft      key.Binding
+	ViewQuote         key.Binding
+	ToggleQuoteImages key.Binding
+	Templates         key.Binding
 
 	// Overlay / input
 	Confirm   key.Binding
@@ -215,13 +216,14 @@ var DefaultKeys = KeyMap{
 	MaximizeCompose: key.NewBinding(key.WithKeys("alt+m"), key.WithHelp("alt+m", "maximize/restore compose")),
 	AttachFile:      key.NewBinding(key.WithKeys("alt+f"), key.WithHelp("alt+f", "attach file")),
 
-	GrammarCheck: key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "fix grammar")),
-	SpellCheck:   key.NewBinding(key.WithKeys("f7"), key.WithHelp("f7", "spell check")),
-	Templates:    key.NewBinding(key.WithKeys("f6"), key.WithHelp("f6", "templates")),
-	PreviewDraft: key.NewBinding(key.WithKeys("f4"), key.WithHelp("f4", "preview in browser")),
-	ViewQuote:    key.NewBinding(key.WithKeys("f3"), key.WithHelp("f3", "view the quoted message")),
-	PGPSign:      key.NewBinding(key.WithKeys("alt+s", "f8"), key.WithHelp("alt+s", "sign (PGP)")),
-	PGPEncrypt:   key.NewBinding(key.WithKeys("alt+e", "f9"), key.WithHelp("alt+e", "encrypt (PGP)")),
+	GrammarCheck:      key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "fix grammar")),
+	SpellCheck:        key.NewBinding(key.WithKeys("f7"), key.WithHelp("f7", "spell check")),
+	Templates:         key.NewBinding(key.WithKeys("f6"), key.WithHelp("f6", "templates")),
+	PreviewDraft:      key.NewBinding(key.WithKeys("f4"), key.WithHelp("f4", "preview in browser")),
+	ViewQuote:         key.NewBinding(key.WithKeys("f3"), key.WithHelp("f3", "view the quoted message")),
+	ToggleQuoteImages: key.NewBinding(key.WithKeys("f10"), key.WithHelp("f10", "quote inline images on/off")),
+	PGPSign:           key.NewBinding(key.WithKeys("alt+s", "f8"), key.WithHelp("alt+s", "sign (PGP)")),
+	PGPEncrypt:        key.NewBinding(key.WithKeys("alt+e", "f9"), key.WithHelp("alt+e", "encrypt (PGP)")),
 
 	LookupContacts: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "look up contact")),
 

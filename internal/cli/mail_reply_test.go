@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +16,12 @@ import (
 
 // replyFixture caches one HTML message with a table and returns its cache ID.
 func replyFixture(t *testing.T) string {
+	t.Helper()
+	return replyFixtureWith(t, `<p>Totals</p><table><tr><th>Item</th><th>Qty</th></tr><tr><td>Pens</td><td>3</td></tr></table><script>bad()</script>`)
+}
+
+// replyFixtureWith is replyFixture with the original's HTML and cached parts chosen by the test.
+func replyFixtureWith(t *testing.T, bodyHTML string, parts ...db.Attachment) string {
 	t.Helper()
 	mailFixture(t)
 	database, err := db.Open()
@@ -24,7 +33,7 @@ func replyFixture(t *testing.T) string {
 	box, _ := database.UpsertMailbox(db.Mailbox{AccountID: acc, Name: "INBOX"})
 	err = database.UpsertMessage(db.Message{MailboxID: box, UID: 5, MessageID: "<orig@x>", References: "<root@x>", Subject: "Budget", From: "Ann Lee <ann@example.com>",
 		ReplyTo: "ann.reply@example.com", Date: time.Date(2026, 3, 10, 9, 5, 0, 0, time.UTC), BodyText: "flat",
-		BodyHTML: `<p>Totals</p><table><tr><th>Item</th><th>Qty</th></tr><tr><td>Pens</td><td>3</td></tr></table><script>bad()</script>`})
+		BodyHTML: bodyHTML, HasAttachment: len(parts) > 0, AttachmentData: parts})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,5 +152,63 @@ func TestReplyToNeedsMessagesReadForAgents(t *testing.T) {
 	_ = json.Unmarshal([]byte(out), &v)
 	if v.OK {
 		t.Error("must not succeed")
+	}
+}
+
+func cliTestPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{uint8(x * 4), uint8(y * 4), uint8(x*y) & 0xff, 255})
+		}
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+func mimeBytesOf(t *testing.T, out string) int {
+	t.Helper()
+	var v struct {
+		Data struct {
+			Bytes int `json:"mime_bytes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &v); err != nil || v.Data.Bytes == 0 {
+		t.Fatalf("no mime_bytes in %s (%v)", out, err)
+	}
+	return v.Data.Bytes
+}
+
+func TestQuoteImagesFlagsCarryTheOriginalsInlineImage(t *testing.T) {
+	id := replyFixtureWith(t, `<p>Chart: <img src="cid:c@x" alt="chart"></p>`,
+		db.Attachment{Filename: "c.png", ContentType: "image/png", ContentID: "c@x", Inline: true, Data: cliTestPNG(t)})
+	dry := func(extra ...string) int {
+		args := append([]string{"send", "--in-reply-to", id, "--quote", "marker", "--body", "x", "--dry-run", "--json"}, extra...)
+		code, out := runHeadless(t, args...)
+		if code != 0 {
+			t.Fatalf("%v: %d %s", extra, code, out)
+		}
+		return mimeBytesOf(t, out)
+	}
+	without, off, with := dry(), dry("--no-quote-images"), dry("--quote-images")
+	if without != off {
+		t.Errorf("the default is off: %d vs %d bytes", without, off)
+	}
+	if with <= without+500 {
+		t.Errorf("--quote-images must attach the image: %d bytes with, %d without", with, without)
+	}
+	for args, want := range map[string]string{
+		"--quote-images --no-quote-images": "cannot be combined",
+		"--quote-images --quote text":      "--quote marker",
+		"--no-quote-images --quote none":   "--quote marker",
+	} {
+		code, out := runHeadless(t, append([]string{"send", "--in-reply-to", id, "--body", "x", "--dry-run", "--json"}, strings.Fields(args)...)...)
+		if code == 0 || !strings.Contains(out, want) {
+			t.Errorf("%q: code=%d %s", args, code, out)
+		}
 	}
 }

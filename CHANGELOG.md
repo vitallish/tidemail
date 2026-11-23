@@ -8,6 +8,14 @@ All notable changes to TideMail are documented in this file.
 
 ### Added
 
+- **Inline images in a reply's quote.** With the quote marker, the original's inline
+  (`cid:`) pictures can be carried into the quote instead of shown as alt text: `F10`
+  in the message (`i` in the `F3` view, or the command palette) switches it for this
+  message, **Settings → Editor → Quote inline images in replies**
+  (`compose_reply_quote_images`, off) sets the default, and `--quote-images` /
+  `--no-quote-images` do the same on the command line. PNG, JPEG and GIF parts cached
+  with the original, up to 5 MB; anything else keeps its alt text and never blocks a
+  send. (#19)
 - **Settings → General → Downloads folder** sets where saving attachments (`Ctrl+D`),
   the log and plugin reports starts. Left blank it follows `XDG_DOWNLOAD_DIR` (the
   variable, or `user-dirs.dirs`) and then `~/Downloads`. It is saved as `download_dir`

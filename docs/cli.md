@@ -65,6 +65,8 @@ nonempty body or an attachment. Incomplete messages cannot authorize delivery.
 | `--template NAME` | Fill the body from a template (case-insensitive name; see below). One body source only; `--subject` overrides the template's subject |
 | `--attach PATH` | Add a file, repeatable |
 | `--in-reply-to cache:ID` | Thread the message as a reply to a cached message, using the ID from `messages list`. Sets In-Reply-To and References; recipients and subject are still yours to give |
+| `--quote marker\|text\|none` | With `--in-reply-to`: also set the `Re:` subject, the recipient and the quote (see "Replying from the command line") |
+| `--quote-images`, `--no-quote-images` | With `--quote marker`: carry the original's inline images into the quote, or leave them as alt text. Default: `[display] compose_reply_quote_images` (off) |
 | `--signature` | Append the configured account signature, enabled by default |
 | `--no-signature` | Omit the configured signature |
 | `--dry-run` | Validate and build MIME without saving, queueing, or delivering |
@@ -157,6 +159,9 @@ tidemail send --in-reply-to cache:123 --quote text --body-file answer.md --dry-r
 ```
 
 `--quote marker` does not work with the interactive wizard (use `--quote text`).
+`--quote-images` attaches the original's cached inline pictures (PNG, JPEG, GIF, up to
+5 MB) to the reply as related parts; a picture that is missing, unsupported or over the
+budget stays as alt text and never fails the command.
 Agents need `messages.read` as well as `drafts.create`, because the reply copies
 the original's body.
 

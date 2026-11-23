@@ -116,6 +116,17 @@ resolved when the message is built), text (an editable Markdown quote is copied 
 body) or none (no quote). Without \-\-quote, \-\-in\-reply\-to only threads. Refused without
 \-\-in\-reply\-to.
 .TP
+.B \-\-quote\-images
+With \-\-quote marker: carry the original's cached inline images (PNG, JPEG, GIF; up to 5 MB)
+into the quote as related parts. A picture that is missing, unsupported or over the budget
+stays as its alt text and never fails the command. The default is
+.B compose_reply_quote_images
+in the \fB[display]\fR table of config.toml (off).
+.TP
+.B \-\-no\-quote\-images
+With \-\-quote marker: leave the original's inline images as their alt text, whatever
+the default is.
+.TP
 .BI \-\-attach " PATH"
 Attach a file; may be repeated.
 .TP

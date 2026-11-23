@@ -72,14 +72,15 @@ func Classify(src string) Kind {
 // Resolver resolves the images of one conversion. Create one per draft
 // conversion; it is not safe for concurrent use.
 type Resolver struct {
-	mode     Mode
-	sources  map[string]Source // lower-cased name -> attachment
-	cache    map[string]processed
-	images   []Image
-	seen     map[string]bool
-	used     map[string]bool
-	total    int
-	problems []string
+	mode       Mode
+	sources    map[string]Source // lower-cased name -> attachment
+	cache      map[string]processed
+	images     []Image
+	seen       map[string]bool
+	used       map[string]bool
+	total      int
+	quoteBytes int // bytes of images carried over from a quoted message
+	problems   []string
 }
 
 // NewResolver returns a Resolver for a draft with the given attachments.
@@ -296,4 +297,43 @@ func PlainText(body string) string {
 		}
 		return "[image]"
 	})
+}
+
+// MaxQuoteBytes limits the images carried over from a quoted message, on top of
+// the draft's own images. A larger quote keeps its alt text for the rest.
+const MaxQuoteBytes = 5 << 20
+
+// EmbedQuoteImage prepares an image taken from a quoted message and returns the
+// source to write into the quote's HTML: a cid: URL in ModeSend (the part is
+// collected in Images) or a data: URI in ModePreview. Unlike a draft image it
+// never records a problem: an image that cannot be processed (webp, svg, a
+// corrupt file) or does not fit the quote budget is simply not carried, ok is
+// false, and the quote keeps its alt text. The quote must not make a send fail
+// over a picture the writer did not choose.
+func (r *Resolver) EmbedQuoteImage(name string, data []byte) (src string, ok bool) {
+	key := fmt.Sprintf("%x/0", sha256.Sum256(data))
+	p, cached := r.cache[key]
+	if !cached {
+		var err error
+		if p, err = process(data, 0); err != nil {
+			return "", false
+		}
+		r.cache[key] = p
+	}
+	if r.mode == ModePreview {
+		return "data:" + p.contentType + ";base64," + base64.StdEncoding.EncodeToString(p.data), true
+	}
+	cid := contentID(p.data)
+	if !r.seen[cid] {
+		if r.quoteBytes+len(p.data) > MaxQuoteBytes {
+			return "", false
+		}
+		r.seen[cid] = true
+		r.quoteBytes += len(p.data)
+		if name == "" {
+			name = "image." + p.ext
+		}
+		r.images = append(r.images, Image{ContentID: cid, Name: name, ContentType: p.contentType, Data: p.data})
+	}
+	return "cid:" + cid, true
 }

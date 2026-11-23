@@ -234,6 +234,8 @@ type DisplayConfig struct {
 	ComposePreviewServer bool `toml:"compose_preview_server"`
 	// ComposeReplyMarker starts replies with a quote marker (resolved at send, keeping the original's HTML) instead of a "> " text quote (off by default).
 	ComposeReplyMarker bool `toml:"compose_reply_marker"`
+	// ComposeReplyQuoteImages is the default for carrying the quoted message's inline (cid:) images into the reply; each message can switch it (off by default).
+	ComposeReplyQuoteImages bool `toml:"compose_reply_quote_images"`
 	// Interactive CLI only; scripted commands ignore these.
 	CLIQuitAfterSend bool `toml:"cli_quit_after_send"` // leave `tidemail cli` after a successful send or draft
 	CLISkipReview    bool `toml:"cli_skip_review"`     // skip the wizard's review step when undo or a draft makes it safe

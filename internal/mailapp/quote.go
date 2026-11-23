@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/allisonhere/tidemail/internal/db"
+	"github.com/allisonhere/tidemail/internal/inlineimg"
 	"github.com/allisonhere/tidemail/internal/quotehtml"
 )
 
@@ -34,10 +35,14 @@ type QuoteLookup func(messageID string) (original db.Message, ok bool, err error
 // BuildQuote prepares original for quoting: its HTML sanitized (or its text
 // turned into paragraphs when it has no HTML), the plain-text form, and an
 // attribution line.
-func BuildQuote(original db.Message) Quote {
+func BuildQuote(original db.Message) Quote { return buildQuote(original, nil) }
+
+// buildQuote is BuildQuote with a resolver for the original's cid: images (nil
+// keeps the policy of dropping them down to their alt text).
+func buildQuote(original db.Message, cid func(contentID string) (string, bool)) Quote {
 	var fragment string
 	if strings.TrimSpace(original.BodyHTML) != "" {
-		fragment = quotehtml.Sanitize(original.BodyHTML)
+		fragment = quotehtml.SanitizeWith(original.BodyHTML, quotehtml.Options{CID: cid})
 	}
 	text := ""
 	if fragment != "" {
@@ -109,6 +114,28 @@ type ComposeOption func(*composeOptions)
 type composeOptions struct {
 	replyTo string
 	lookup  QuoteLookup
+	// quoteImages loads the original's cached image parts; nil means the quote
+	// keeps only the alt text of its inline images.
+	quoteImages QuoteImageLoader
+}
+
+// QuoteImageLoader returns the cached image parts of a quoted message (the ones
+// with a Content-ID or an image type), with their bytes.
+type QuoteImageLoader func(original db.Message) ([]db.Attachment, error)
+
+// WithQuoteImages makes the quote carry the original's inline (cid:) images: they
+// are attached to the reply as related parts and the quote's HTML points at
+// them. Without it, or when a part is missing, unsupported (webp, svg), or over
+// the quote's size budget, the image stays as its alt text.
+func WithQuoteImages(load QuoteImageLoader) ComposeOption {
+	return func(o *composeOptions) { o.quoteImages = load }
+}
+
+// NewQuoteImageLoader reads the parts from the local cache.
+func NewQuoteImageLoader(database *db.DB) QuoteImageLoader {
+	return func(original db.Message) ([]db.Attachment, error) {
+		return database.GetImageParts(original.ID)
+	}
 }
 
 // WithQuote lets a body's QuoteMarker be resolved: lookup finds the original by
@@ -127,7 +154,7 @@ func applyOptions(opts []ComposeOption) composeOptions {
 }
 
 // resolveQuote finds the quote for a body that contains the marker.
-func (o composeOptions) resolveQuote() (*Quote, error) {
+func (o composeOptions) resolveQuote(images *inlineimg.Resolver) (*Quote, error) {
 	if o.lookup == nil || strings.TrimSpace(o.replyTo) == "" {
 		return nil, fmt.Errorf("%s has nothing to quote here: this is not a reply, so delete %s", QuoteMarker, QuoteMarker)
 	}
@@ -138,6 +165,28 @@ func (o composeOptions) resolveQuote() (*Quote, error) {
 	if !ok {
 		return nil, fmt.Errorf("the message you are replying to is no longer in the cache: expand the quote (or delete %s) before sending", QuoteMarker)
 	}
-	q := BuildQuote(original)
+	var cid func(string) (string, bool)
+	if o.quoteImages != nil && images != nil {
+		parts, err := o.quoteImages(original)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read the quoted message's images: %w", err)
+		}
+		byCID := map[string]db.Attachment{}
+		for _, p := range parts {
+			if key := cidKey(p.ContentID); key != "" {
+				byCID[key] = p
+			}
+		}
+		cid = func(contentID string) (string, bool) {
+			part, ok := byCID[cidKey(contentID)]
+			if !ok {
+				return "", false
+			}
+			return images.EmbedQuoteImage(part.Filename, part.Data)
+		}
+	}
+	q := buildQuote(original, cid)
 	return &q, nil
 }
+
+func cidKey(id string) string { return strings.ToLower(strings.Trim(strings.TrimSpace(id), "<>")) }
