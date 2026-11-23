@@ -1735,6 +1735,7 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `Ctrl+T` in the account form | Test the connection without saving |
 | `Ctrl+L` in the account form | Look up a Custom account's servers from its email domain (DNS SRV, MX, then HTTPS autoconfig) |
 | `PgDn` / `PgUp` or `Shift+J` / `Shift+K` | Page down / up in the message list and the reading pane. In the message list the cursor moves a screenful; at the last row it loads older mail like `Down`. In the reading pane the page keeps one line of overlap and, with the focus line on, moves the highlight. In Accounts, `Shift+J` / `Shift+K` still reorder instead. |
+| `Ctrl+J` / `Ctrl+K` | With the message list focused and a message open, scroll the reading pane down / up one row. The list cursor, focus, and open message do not change; with nothing open the keys do nothing. Needs a terminal that sends Ctrl+J as a line feed distinct from `Enter` (kitty, tmux, and most others do). |
 | `s` | Sync current mailbox (Unified Inbox: syncs all inboxes) |
 | `Enter` on a conversation parent | Expand/collapse; `Right` / `l` or `Tab` opens its email in the reader |
 | `Enter` on a child or single message | Focus the reader |
