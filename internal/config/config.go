@@ -210,6 +210,7 @@ type DisplayConfig struct {
 	FilterLinks             bool   `toml:"filter_links"`
 	ShowSender              bool   `toml:"show_sender"`
 	ShowAttachmentMarker    bool   `toml:"show_attachment_marker"` // mark messages that have a real attachment in the list; off by default
+	Clipboard               string `toml:"clipboard"`              // copy path: "auto" (terminal escape first over SSH), "osc52" or "local"; config file only
 	ThreadedConversations   bool   `toml:"threaded_conversations"`
 	ReadingWidth            int    `toml:"reading_width"`
 	AccountsWidthPercent    int    `toml:"accounts_width_percent"`

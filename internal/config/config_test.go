@@ -641,3 +641,19 @@ func TestAttachmentOpenCmdSurvivesSaveAndLoad(t *testing.T) {
 		t.Fatalf("AttachmentOpenCmd = %q", got.Display.AttachmentOpenCmd)
 	}
 }
+
+func TestClipboardModeSurvivesSaveAndLoad(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := DefaultConfig()
+	if cfg.Display.Clipboard != "" {
+		t.Fatalf("clipboard must default to automatic (empty), got %q", cfg.Display.Clipboard)
+	}
+	cfg.Display.Clipboard = "osc52"
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	if err != nil || got.Display.Clipboard != "osc52" {
+		t.Fatalf("round trip lost clipboard: %q (%v)", got.Display.Clipboard, err)
+	}
+}

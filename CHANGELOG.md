@@ -27,6 +27,13 @@ All notable changes to TideMail are documented in this file.
   Inline logos and signature parts are not counted. `messages list --json` and
   `messages search --json` report the same answer as `attachment_marker`, next to the
   broader `has_attachment`. (#31)
+- **Copying over SSH.** Over an SSH session copies now go to your terminal's clipboard
+  first (an OSC 52 escape written to the controlling terminal, wrapped for tmux and
+  screen) instead of a local tool that would fill the remote machine's clipboard.
+  A status-bar `ssh` badge shows the session, the copy message says when the terminal
+  was only sent the text, and text over 100 KB is refused rather than cut. `clipboard`
+  in `[display]` (`auto`, `osc52`, `local`) overrides detection, for example in a tmux
+  started outside SSH. Ctrl+V over SSH points at the terminal's own paste. (#29)
 - **Settings → General → Downloads folder** sets where saving attachments (`Ctrl+D`),
   the log and plugin reports starts. Left blank it follows `XDG_DOWNLOAD_DIR` (the
   variable, or `user-dirs.dirs`) and then `~/Downloads`. It is saved as `download_dir`

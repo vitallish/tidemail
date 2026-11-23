@@ -612,6 +612,7 @@ compose_preview_server = false  # F4 preview: true serves a live page from a loc
 reply_focus_body = false  # true: Reply and Reply All start in the message body instead of the header
 # attachment_open_cmd = "zathura {file}"  # optional: program for the w key; default is the system opener
 show_attachment_marker = false  # true marks messages with an attachment in the list
+clipboard = "auto"  # copy path: "auto" (terminal escape first over SSH), "osc52", or "local" (see docs/guide.md, Copy and paste over SSH)
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]

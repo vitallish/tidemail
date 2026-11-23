@@ -1808,6 +1808,37 @@ plugin, see [`plugins.md`](plugins.md) and the Plugin API v1 docs in
 | `?` | Help |
 | `q` | Quit |
 
+### Copy and paste over SSH
+
+Every copy in TideMail (message source, links, the log, the quoted message, text
+selected in compose) goes through one path. It uses `wl-copy`, `xclip`, `xsel` or
+`pbcopy` when one works, and an OSC 52 terminal escape otherwise. Over SSH a local
+tool would fill the *remote* machine's clipboard, so there the escape goes first:
+your own terminal receives it and sets your local clipboard. A status-bar `ssh`
+badge shows when TideMail sees an SSH session (`SSH_CONNECTION`, `SSH_TTY` or
+`SSH_CLIENT`), and the copy message then reads "sent to your terminal's clipboard"
+because a terminal cannot confirm that it accepted the escape.
+
+- Terminals that accept OSC 52 writes: kitty, WezTerm, iTerm2, Ghostty, foot,
+  Alacritty, Windows Terminal; some need a setting (xterm: `allowWindowOps`; kitty:
+  `clipboard_control` must allow `write-clipboard`).
+- tmux: `set -g set-clipboard on` is enough; `set -g allow-passthrough on` also
+  works, because TideMail sends both forms under tmux. GNU screen is wrapped too.
+- Text over about 100 KB is refused with a message instead of being cut short
+  (many terminals drop larger escapes). Save it to a file instead.
+- If TideMail runs in a tmux server that was started outside SSH, it cannot see
+  the SSH variables. Set `clipboard = "osc52"` in `[display]` (config file only;
+  `"local"` forces local tools first, the default `"auto"` decides from the
+  environment).
+- Paste goes the other way and cannot use OSC 52 (terminals disable reads). Use
+  your terminal's paste (Ctrl+Shift+V, middle click, Cmd+V): it arrives as a
+  bracketed paste and works over SSH. `Ctrl+V` in compose reads the local
+  clipboard and says so when there is none.
+- Files and images cannot be copied this way: OSC 52 carries text only, and
+  `wl-copy`/`xclip` on the remote host reach the remote clipboard. Save an
+  attachment (`Ctrl+D`) and fetch it with `scp`; inline images already display in
+  terminals with image support.
+
 ### PGP encryption and signing
 
 TideMail can read and send PGP mail (the PGP/MIME and inline formats) through a
