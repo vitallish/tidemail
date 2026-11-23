@@ -8,6 +8,7 @@ All notable changes to TideMail are documented in this file.
 
 ### Added
 
+- **View in Browser** (`Ctrl+B`) shows a message's own inline (`cid:`) images: they are embedded as `data:` pictures in the export, so logos, charts and screenshots no longer show as broken images. Remote images are still blocked until you press `Ctrl+B` again. An inline image that can't be shown is counted in the status line. (#24, #11)
 - **Settings → General → Downloads folder** sets where saving attachments (`Ctrl+D`),
   the log and plugin reports starts. Left blank it follows `XDG_DOWNLOAD_DIR` (the
   variable, or `user-dirs.dirs`) and then `~/Downloads`. It is saved as `download_dir`

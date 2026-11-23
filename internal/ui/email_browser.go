@@ -26,6 +26,8 @@ type emailBrowserOpenedMsg struct {
 	blocked int
 	// images reports that remote images were deliberately loaded.
 	images bool
+	// missing counts inline (cid:) images the export could not show.
+	missing int
 }
 
 var fetchEmailSource = Model.messageSourceFetcher
@@ -49,8 +51,8 @@ func (m Model) openEmailInBrowser(msg db.Message, allowImages bool) (tea.Model, 
 		if err != nil {
 			return emailBrowserOpenedMsg{err: err, msgID: id}
 		}
-		blocked, err := openEmailHTML(raw, configured, allowImages)
-		return emailBrowserOpenedMsg{err: err, msgID: id, blocked: blocked, images: allowImages}
+		blocked, missing, err := openEmailHTMLCounting(raw, configured, allowImages)
+		return emailBrowserOpenedMsg{err: err, msgID: id, blocked: blocked, images: allowImages, missing: missing}
 	}
 }
 
@@ -102,29 +104,39 @@ func pruneEmailExports(dir string, now time.Time, maxAge time.Duration) {
 // opens it, in the configured browser when one is set. It reports how many
 // remote images were left out; with allowImages remote images are kept.
 func openEmailHTML(raw []byte, configured string, allowImages bool) (blocked int, err error) {
-	src := imapClient.ExtractHTML(raw)
+	blocked, _, err = openEmailHTMLCounting(raw, configured, allowImages)
+	return blocked, err
+}
+
+// openEmailHTMLCounting is openEmailHTML that also reports how many inline
+// (cid:) images could not be embedded. The message's own images are embedded as
+// data: URIs: they make no network request, so they need no opt-in.
+func openEmailHTMLCounting(raw []byte, configured string, allowImages bool) (blocked, missing int, err error) {
+	src, images := imapClient.ExtractHTMLWithImages(raw)
 	if src == "" {
-		return 0, fmt.Errorf("this message has no HTML body")
+		return 0, 0, fmt.Errorf("this message has no HTML body")
 	}
 	if !utf8.ValidString(src) {
-		return 0, fmt.Errorf("the message HTML could not be decoded as UTF-8")
+		return 0, 0, fmt.Errorf("the message HTML could not be decoded as UTF-8")
 	}
-	html, blocked, err := sanitizeEmailHTML(strings.TrimPrefix(src, "\ufeff"), allowImages)
+	cids := newCIDEmbedding(images)
+	html, blocked, err := sanitizeEmailHTMLWith(strings.TrimPrefix(src, "\ufeff"), allowImages, cids.embed)
 	if err != nil {
-		return 0, fmt.Errorf("prepare HTML: %w", err)
+		return 0, 0, fmt.Errorf("prepare HTML: %w", err)
 	}
+	missing = cids.missing()
 	// MIME decoding produces UTF-8. A leading BOM makes browsers use UTF-8
 	// even when the original HTML still declares a different charset, without
 	// rewriting its markup. Preserve an existing BOM rather than adding two.
 	html = "\ufeff" + strings.TrimPrefix(html, "\ufeff")
 	dir, err := emailExportDir()
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	pruneEmailExports(dir, time.Now(), emailExportMaxAge)
 	file, err := os.CreateTemp(dir, "tidemail-email-*.html")
 	if err != nil {
-		return 0, fmt.Errorf("create temporary HTML: %w", err)
+		return 0, 0, fmt.Errorf("create temporary HTML: %w", err)
 	}
 	path := file.Name()
 	// Remove failed exports immediately; successful ones stay available for
@@ -138,14 +150,25 @@ func openEmailHTML(raw []byte, configured string, allowImages bool) (blocked int
 	_, writeErr := file.WriteString(html)
 	closeErr := file.Close()
 	if writeErr != nil {
-		return 0, fmt.Errorf("write temporary HTML: %w", writeErr)
+		return 0, 0, fmt.Errorf("write temporary HTML: %w", writeErr)
 	}
 	if closeErr != nil {
-		return 0, fmt.Errorf("close temporary HTML: %w", closeErr)
+		return 0, 0, fmt.Errorf("close temporary HTML: %w", closeErr)
 	}
 	if err := openEmailBrowser(configured, path); err != nil {
-		return 0, fmt.Errorf("could not launch browser: %w", err)
+		return 0, 0, fmt.Errorf("could not launch browser: %w", err)
 	}
 	keep = true
-	return blocked, nil
+	return blocked, missing, nil
+}
+
+// missingInlineNote is the status suffix for inline images that could not be shown.
+func missingInlineNote(n int) string {
+	switch {
+	case n == 1:
+		return " · 1 inline image could not be shown"
+	case n > 1:
+		return fmt.Sprintf(" · %d inline images could not be shown", n)
+	}
+	return ""
 }

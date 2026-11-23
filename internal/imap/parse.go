@@ -536,6 +536,27 @@ func ExtractHTML(raw []byte) string {
 	return html
 }
 
+// InlineImage is an image part of a message that HTML addresses as cid:<ContentID>.
+type InlineImage struct {
+	ContentID   string // bare form, no angle brackets
+	ContentType string
+	Data        []byte
+}
+
+// ExtractHTMLWithImages is ExtractHTML plus the image parts that carry a
+// Content-ID, so an export can resolve the HTML's cid: references. It uses the
+// same parser as message synchronization.
+func ExtractHTMLWithImages(raw []byte) (string, []InlineImage) {
+	_, html, atts := parseBody(raw)
+	var images []InlineImage
+	for _, a := range atts {
+		if a.ContentID != "" && strings.HasPrefix(strings.ToLower(a.ContentType), "image/") {
+			images = append(images, InlineImage{ContentID: a.ContentID, ContentType: strings.ToLower(a.ContentType), Data: a.Data})
+		}
+	}
+	return html, images
+}
+
 // normalizeCID strips the RFC 2045 angle brackets and surrounding whitespace
 // from a Content-ID header. HTML addresses these parts as src="cid:<id>",
 // where the id is the bare form, so the stored value must be the bare form too.
