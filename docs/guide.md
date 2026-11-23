@@ -206,6 +206,13 @@ have to press `s`.
 Use the three panes to choose an account or folder, select a message, and read
 its contents. Press `Tab` or `Shift+Tab` to move between panes.
 
+**Settings → Display → Mark messages with attachments** (`show_attachment_marker`, off by
+default) adds an `ATTACH` chip, drawn like a mail tag such as `$HAS_CAL`, to messages that have an
+attachment (`⊕` when the row is narrow, `[attach]` in the VT52 theme). Inline logos and signature parts
+(PGP, S/MIME) do not count. The rule looks at the parts cached with the message; a
+message whose body has not been fetched yet is marked if the server reported an
+attachment.
+
 In the message list, press `Space` to select several messages. You can then
 archive them with `a`, delete them with `d`, move them with `m`, or mark them as
 read. Press `A` to select every message in the current view.
@@ -1644,7 +1651,7 @@ Clicks and the wheel do nothing while Settings, the Account Manager, Compose, or
 any other overlay is open. Turning mouse support on trades away your terminal's
 native click-drag text selection while it's enabled.
 
-- Display: theme, icons, support reminder, tag style and colors, message tags (header row, tag names and colors), Needs You and Waiting on Them sidebar rows, date format, mark-read behavior, focus line, show sender, unread-first ordering, actionable links, reading width, browser command, density, show email headers, desktop notifications, mouse support, and quit confirmation. On Linux, a notification for new mail includes **Mark Read**, **Delete**, and **Read** actions. Mark Read and Delete cover every message when more than one arrives at once; Delete uses the normal six-second undo window. Read opens the first message in TideMail. Dismiss the notification to ignore it.
+- Display: theme, icons, support reminder, tag style and colors, message tags (header row, tag names and colors), Needs You and Waiting on Them sidebar rows, date format, mark-read behavior, focus line, show sender, the attachment marker, unread-first ordering, actionable links, reading width, browser command, density, show email headers, desktop notifications, mouse support, and quit confirmation. On Linux, a notification for new mail includes **Mark Read**, **Delete**, and **Read** actions. Mark Read and Delete cover every message when more than one arrives at once; Delete uses the normal six-second undo window. Read opens the first message in TideMail. Dismiss the notification to ignore it.
 
   The Read button or clicking the notification body opens the first notified message in the reader,
   clears search and unread-only filters, and follows **Mark read on open**. On

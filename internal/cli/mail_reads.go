@@ -215,6 +215,9 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		if e != nil {
 			return fail("database_error", "Cannot resolve message identity.", 1)
 		}
+		// The same answer as the list marker: a real attachment, not an inline logo
+		// or a signature part (has_attachment is the broader stored flag).
+		data["attachment_marker"] = m.AttachmentMarker
 		items = append(items, data)
 	}
 	return readSuccess(out, jsonMode, readBoundedPage(items, total, *limit, *offset))

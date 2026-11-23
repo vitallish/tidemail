@@ -42,6 +42,7 @@ const (
 	sfFocusLine
 	sfSupportReminder
 	sfShowSender
+	sfShowAttachmentMarker
 	sfThreadedConversations
 	sfDefaultUnreadOnly
 	sfUnreadFirst
@@ -349,6 +350,7 @@ type Settings struct {
 	shadow                  bool
 	transparent             bool
 	showSender              bool
+	showAttachmentMarker    bool
 	threadedConversations   bool
 	defaultUnreadOnly       bool
 	unreadFirst             bool
@@ -478,6 +480,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		shadow:                  cfg.Display.Shadow,
 		transparent:             cfg.Display.Transparent,
 		showSender:              cfg.Display.ShowSender,
+		showAttachmentMarker:    cfg.Display.ShowAttachmentMarker,
 		threadedConversations:   cfg.Display.ThreadedConversations,
 		defaultUnreadOnly:       cfg.Display.DefaultUnreadOnly,
 		unreadFirst:             cfg.Display.UnreadFirst,
@@ -576,6 +579,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.Shadow = s.shadow
 	cfg.Display.Transparent = s.transparent
 	cfg.Display.ShowSender = s.showSender
+	cfg.Display.ShowAttachmentMarker = s.showAttachmentMarker
 	cfg.Display.ThreadedConversations = s.threadedConversations
 	cfg.Display.DefaultUnreadOnly = s.defaultUnreadOnly
 	cfg.Display.UnreadFirst = s.unreadFirst
@@ -848,7 +852,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		if config.IsRetroTerminalTheme(s.themeName) {
 			fields = append(fields, sfRetroBg, sfRetroFg, sfRetroAccent)
 		}
-		fields = append(fields, sfShowSender, sfThreadedConversations, sfDefaultUnreadOnly, sfUnreadFirst, sfStarredFirst)
+		fields = append(fields, sfShowSender, sfShowAttachmentMarker, sfThreadedConversations, sfDefaultUnreadOnly, sfUnreadFirst, sfStarredFirst)
 		fields = append(fields, sfReadingWidth, sfShowHeaders, sfMarkReadOnOpen, sfMarkReadOnFocus, sfActionableLinks, sfFilterLinks, sfImages)
 		return fields
 	case ssGeneral:
@@ -1553,6 +1557,15 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 			s.setFocusedField(s.prevField())
 		}
 
+	case sfShowAttachmentMarker:
+		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.showAttachmentMarker = !s.showAttachmentMarker
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
 	case sfThreadedConversations:
 		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.threadedConversations = !s.threadedConversations
@@ -2149,6 +2162,7 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		}
 		b.addGroup("Message list")
 		b.addToggle("Show sender", s.showSender, sfShowSender)
+		b.addToggle("Mark messages with attachments", s.showAttachmentMarker, sfShowAttachmentMarker)
 		b.addToggle("Threaded conversations", s.threadedConversations, sfThreadedConversations)
 		b.addToggle("Default to unread only", s.defaultUnreadOnly, sfDefaultUnreadOnly)
 		b.addToggle("Unread first", s.unreadFirst, sfUnreadFirst)
@@ -3393,6 +3407,8 @@ func (s Settings) fieldHint(field settingsField) string {
 		return "← → to compare Pills (Square/Round/None), Compact, Plain, Glyph Pills (Round), and Tag icons; Round and Tag icons need a Nerd Font"
 	case sfShowSender:
 		return "show the sender's name in a column before the subject in the message list"
+	case sfShowAttachmentMarker:
+		return "add an ATTACH chip, styled like a mail tag, to messages with an attachment; inline logos and signature parts do not count"
 	case sfThreadedConversations:
 		return "group related replies into one optional conversation row"
 	case sfNotifications:

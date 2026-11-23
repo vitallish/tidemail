@@ -20,8 +20,9 @@ signature parts as attachments.
   No schema change, always in step with the cached parts.
 - `Message.AttachmentMarker` (transient). `GetMessage` does not fill it.
 - Setting `show_attachment_marker` (off by default, like upstream today). Row:
-  a two-cell mark put before the date, blank when absent, so the date column
-  does not move. `⊕` icons on, `+` icons off, `@` in the VT52 theme.
+  an `ATTACH` chip in the tag area, like a mail tag (`$HAS_CAL`); it was first a
+  two-cell glyph before the date, replaced 2026-11-23 because the owner found it too
+  small. `⊕` when narrow, `[attach]` in the VT52 theme.
 - CLI: `messages list|search --json` gains `attachment_marker` beside
   `has_attachment`, so scripts get the answer the list shows.
 

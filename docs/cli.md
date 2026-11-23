@@ -149,7 +149,9 @@ tidemail messages read cache:123 --json
 ```
 
 List and search results contain metadata, including subject, sender, recipients,
-account, mailbox, read state, and attachment presence. They do not contain full
+account, mailbox, read state, and attachment presence (`has_attachment` is true for
+any non-body part, `attachment_marker` only for what the message list marks: real
+attachments, not inline logos or signature parts). They do not contain full
 message bodies. `messages read` explicitly returns the cached plain-text and HTML
 bodies. A body that has not been cached can be empty.
 
