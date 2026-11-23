@@ -138,6 +138,16 @@ subject are still yours to give. Under
 .BR \-\-agent ,
 this needs the messages.metadata capability.
 .TP
+.BI \-\-forward " cache:ID"
+Forward a cached message: the subject defaults to Fwd:, the original's attachments come
+along, the draft is not threaded into the original's conversation, and the original is
+quoted as
+.B \-\-quote
+says (default marker). The recipients are yours to give. Cannot be combined with
+\-\-in\-reply\-to. Under
+.BR \-\-agent ,
+this needs the messages.read capability.
+.TP
 .B \-\-signature\fR, \fB\-\-no\-signature
 Append, or omit, the account signature (on by default).
 .TP

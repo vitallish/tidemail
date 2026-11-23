@@ -2232,7 +2232,7 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.addToggle("Live preview server (F4)", s.composePreviewServer, sfComposePreviewServer)
 		b.addFieldHint(sfComposePreviewServer, "F4 shows the draft in your browser and updates it as you type, served from a local port on this machine (127.0.0.1 only, secret address, stops with compose). Off: F4 writes a static file; press F4 again to refresh.")
 		b.addToggle("Reply quote marker", s.composeReplyMarker, sfComposeReplyMarker)
-		b.addFieldHint(sfComposeReplyMarker, "New replies get a \u2051 line standing for the quoted message instead of a pasted \"> \" quote. The original's formatting (tables, lists, links) is kept when sent; move it to reply above, below or between its parts, or delete it to send no quote. Off: replies start with the quote as plain text.")
+		b.addFieldHint(sfComposeReplyMarker, "New replies and forwards get a \u2051 line standing for the quoted message instead of a pasted \"> \" quote. The original's formatting (tables, lists, links) is kept when sent; move it to reply above, below or between its parts, or delete it to send no quote. Off: replies and forwards start with the quote as plain text.")
 		b.addToggle("Quote inline images in replies", s.composeReplyQuoteImages, sfComposeReplyQuoteImages)
 		b.addFieldHint(sfComposeReplyQuoteImages, "Replies with the quote marker also carry the quoted message's inline pictures (logos, charts, screenshots) so they show in the quote. Off: they appear as their alt text. Each message can switch it with F10, or i in the quoted-message view (F3). Needs the picture to be cached and a PNG, JPEG or GIF; at most 5 MB are carried.")
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)

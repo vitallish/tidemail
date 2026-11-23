@@ -33,7 +33,7 @@ the inline-image switch, instead of a flattened `> ` text quote.
 ## Not done
 A forward header `Date` in the sender's time zone (it follows the local zone like
 the text forward); remote-imported drafts have no forward key (only drafts made
-here do); inline images are both attachments and (with Alt+I) in the quote.
+here do); inline images are both attachments and (with F10) in the quote.
 
 ## Tests
 mailapp (header block in HTML/text, no In-Reply-To, key from the draft or the

@@ -31,11 +31,15 @@ type Draft struct {
 	BodyText        string
 	InReplyTo       string
 	References      string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	LastRemoteSync  time.Time
-	Dirty           bool
-	Attachments     []DraftAttachment
+	// ForwardOf is the Message-ID of the message a forward carries, so the quote
+	// marker can be resolved from the cache when the forward is previewed or
+	// sent. It is not In-Reply-To: a forward must not join the original's thread.
+	ForwardOf      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	LastRemoteSync time.Time
+	Dirty          bool
+	Attachments    []DraftAttachment
 }
 
 type DraftAttachment struct {
@@ -92,11 +96,11 @@ func saveDraft(tx *sql.Tx, d Draft) (int64, error) {
 		res, err := tx.Exec(`
 			INSERT INTO drafts
 				(account_config_id, account_name, account_user, account_index, mailbox_id, remote_uid, remote_message_id,
-				 to_addr, cc_addr, bcc_addr, subject, body_text, in_reply_to, references_text, sender_from,
+				 to_addr, cc_addr, bcc_addr, subject, body_text, in_reply_to, references_text, sender_from, forward_of,
 				 created_at, updated_at, last_remote_sync, dirty)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			d.AccountConfigID, d.AccountName, d.AccountUser, d.AccountIndex, d.MailboxID, d.RemoteUID, d.RemoteMessageID,
-			d.To, d.CC, d.BCC, d.Subject, d.BodyText, d.InReplyTo, d.References, d.SenderFrom,
+			d.To, d.CC, d.BCC, d.Subject, d.BodyText, d.InReplyTo, d.References, d.SenderFrom, d.ForwardOf,
 			createdAt, updatedAt, lastRemoteSync, dirty)
 		if err != nil {
 			return 0, err
@@ -118,7 +122,7 @@ func saveDraft(tx *sql.Tx, d Draft) (int64, error) {
 				remote_uid = CASE WHEN ? != 0 THEN ? ELSE remote_uid END,
 				remote_message_id = CASE WHEN ? != '' THEN ? ELSE remote_message_id END,
 				to_addr = ?, cc_addr = ?, bcc_addr = ?,
-				subject = ?, body_text = ?, in_reply_to = ?, references_text = ?, sender_from = ?,
+				subject = ?, body_text = ?, in_reply_to = ?, references_text = ?, sender_from = ?, forward_of = ?,
 				created_at = CASE WHEN ? != 0 THEN ? ELSE created_at END,
 				updated_at = ?,
 				last_remote_sync = CASE WHEN ? != 0 THEN ? ELSE last_remote_sync END,
@@ -130,7 +134,7 @@ func saveDraft(tx *sql.Tx, d Draft) (int64, error) {
 			d.RemoteUID, d.RemoteUID,
 			d.RemoteMessageID, d.RemoteMessageID,
 			d.To, d.CC, d.BCC,
-			d.Subject, d.BodyText, d.InReplyTo, d.References, d.SenderFrom,
+			d.Subject, d.BodyText, d.InReplyTo, d.References, d.SenderFrom, d.ForwardOf,
 			createdAt, createdAt,
 			updatedAt,
 			lastRemoteSync, lastRemoteSync,
@@ -166,7 +170,7 @@ func saveDraft(tx *sql.Tx, d Draft) (int64, error) {
 func (db *DB) GetDraft(id int64) (Draft, error) {
 	row := db.QueryRow(`
 		SELECT id, account_config_id, account_name, account_user, account_index, mailbox_id, remote_uid, remote_message_id,
-		       to_addr, cc_addr, bcc_addr, subject, body_text, in_reply_to, references_text, sender_from,
+		       to_addr, cc_addr, bcc_addr, subject, body_text, in_reply_to, references_text, sender_from, forward_of,
 		       created_at, updated_at, last_remote_sync, dirty
 		FROM drafts WHERE id = ?`, id)
 	d, err := scanDraft(row)
@@ -190,7 +194,7 @@ const draftOwnerClause = `((account_config_id != '' AND account_config_id = ?)
 func (db *DB) ListDrafts(accountConfigID, accountName, accountUser string) ([]Draft, error) {
 	rows, err := db.Query(`
 		SELECT id, account_config_id, account_name, account_user, account_index, mailbox_id, remote_uid, remote_message_id,
-		       to_addr, cc_addr, bcc_addr, subject, body_text, in_reply_to, references_text, sender_from,
+		       to_addr, cc_addr, bcc_addr, subject, body_text, in_reply_to, references_text, sender_from, forward_of,
 		       created_at, updated_at, last_remote_sync, dirty
 		FROM drafts
 		WHERE `+draftOwnerClause+`
@@ -406,7 +410,7 @@ func scanDraft(row draftScanner) (Draft, error) {
 	var dirty int
 	if err := row.Scan(
 		&d.ID, &d.AccountConfigID, &d.AccountName, &d.AccountUser, &d.AccountIndex, &d.MailboxID, &d.RemoteUID, &d.RemoteMessageID,
-		&d.To, &d.CC, &d.BCC, &d.Subject, &d.BodyText, &d.InReplyTo, &d.References, &d.SenderFrom,
+		&d.To, &d.CC, &d.BCC, &d.Subject, &d.BodyText, &d.InReplyTo, &d.References, &d.SenderFrom, &d.ForwardOf,
 		&createdAt, &updatedAt, &lastRemoteSync, &dirty,
 	); err != nil {
 		if err == sql.ErrNoRows {

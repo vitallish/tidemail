@@ -42,7 +42,9 @@ Issue: vitallish/tidemail #4 (keep HTML structure when quoting). Written
    (`--in-reply-to` is upstream's threading flag; `--quote` adds the rest)
    builds the same draft (placeholder plus snapshot), and the sender resolves it
    identically, so the whole path is testable without the TUI. Forward can adopt
-   the same mechanism later; not in this change.
+   the same mechanism later; not in this change. (Done in #20: the draft stores the
+   forwarded Message-ID in `forward_of`, `mailapp.BuildForwardQuote` heads the quote
+   with the forwarded-message header block, `--forward cache:ID` is the CLI form.)
 
 ## Decisions (owner, 2026-11-12)
 1. **Lookup, not snapshot.** The original is found by the draft's `In-Reply-To`

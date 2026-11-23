@@ -8,6 +8,12 @@ All notable changes to TideMail are documented in this file.
 
 ### Added
 
+- **Forward uses the quote marker.** With **Settings → Editor → Reply quote marker** on, a
+  forward starts with the same `⁑` line as a reply: the forwarded message keeps its
+  tables, lists and links, with a "Forwarded message" header block, and `F3`, `e` and
+  `F10` work on it. The draft remembers what it forwards (`drafts.forward_of`), not
+  as In-Reply-To. Attachments are carried as before. `tidemail send|draft create
+  --forward cache:ID [--quote marker|text|none]` does the same on the command line. (#20)
 - **Inline images in a reply's quote.** With the quote marker, the original's inline
   (`cid:`) pictures can be carried into the quote instead of shown as alt text: `F10`
   in the message (`i` in the `F3` view, or the command palette) switches it for this

@@ -49,10 +49,14 @@ func setComposeQuoteDB(database *db.DB) {
 	}
 }
 
-// quoteOptions are the compose options that let the marker be resolved, and
+// quoteOptionsFor are the compose options that let the marker be resolved, and
 // make the quote carry the original's inline images when images is true.
-func quoteOptions(replyTo string, images bool) []mailapp.ComposeOption {
-	opts := []mailapp.ComposeOption{mailapp.WithQuote(strings.TrimSpace(replyTo), composeQuoteLookup)}
+func quoteOptionsFor(key string, forward, images bool) []mailapp.ComposeOption {
+	key = strings.TrimSpace(key)
+	opts := []mailapp.ComposeOption{mailapp.WithQuote(key, composeQuoteLookup)}
+	if forward {
+		opts = []mailapp.ComposeOption{mailapp.WithForwardQuote(key, composeQuoteLookup)}
+	}
 	if images && composeQuoteImageLoader != nil {
 		opts = append(opts, mailapp.WithQuoteImages(composeQuoteImageLoader))
 	}
@@ -83,16 +87,45 @@ func (c ComposeModel) hasQuoteMarker() bool {
 	return strings.Contains(c.bodyInput.Value(), mailapp.QuoteMarker)
 }
 
-// quoteOriginal finds the message this reply answers.
-func (c ComposeModel) quoteOriginal() (db.Message, error) {
-	if composeQuoteLookup == nil || strings.TrimSpace(c.inReplyTo) == "" {
-		return db.Message{}, fmt.Errorf("this is not a reply, so there is no message to quote")
+// quoteOptions are the options PrepareCompose and ComposeHTML need to resolve this
+// message's quote marker.
+func (c ComposeModel) quoteOptions() []mailapp.ComposeOption {
+	key, forward := c.quoteKey()
+	return quoteOptionsFor(key, forward, c.quoteImages)
+}
+
+// quoteKey is the Message-ID the quote marker is resolved from: the message a
+// reply answers, else the message a forward carries (never both: a forward is
+// not threaded into the original's conversation).
+func (c ComposeModel) quoteKey() (key string, forward bool) {
+	if k := strings.TrimSpace(c.inReplyTo); k != "" {
+		return k, false
 	}
-	original, ok, err := composeQuoteLookup(strings.TrimSpace(c.inReplyTo))
+	return strings.TrimSpace(c.forwardOf), true
+}
+
+// buildQuote is the quote of original as this message presents it.
+func (c ComposeModel) buildQuote(original db.Message) mailapp.Quote {
+	if _, forward := c.quoteKey(); forward {
+		return mailapp.BuildForwardQuote(original)
+	}
+	return mailapp.BuildQuote(original)
+}
+
+// quoteOriginal finds the message this reply answers or this forward carries.
+func (c ComposeModel) quoteOriginal() (db.Message, error) {
+	key, forward := c.quoteKey()
+	if composeQuoteLookup == nil || key == "" {
+		return db.Message{}, fmt.Errorf("this is neither a reply nor a forward, so there is no message to quote")
+	}
+	original, ok, err := composeQuoteLookup(key)
 	if err != nil {
 		return db.Message{}, err
 	}
 	if !ok {
+		if forward {
+			return db.Message{}, fmt.Errorf("the message you are forwarding is no longer in the cache")
+		}
 		return db.Message{}, fmt.Errorf("the message you are replying to is no longer in the cache")
 	}
 	return original, nil
@@ -110,7 +143,7 @@ func (c ComposeModel) openQuoteView() ComposeModel {
 		c.statusMsg, c.isErr = err.Error(), true
 		return c
 	}
-	q := mailapp.BuildQuote(original)
+	q := c.buildQuote(original)
 	c.quoteText = q.Attribution + "\n\n" + q.Text
 	c.quoteTop = 0
 	c.quoteOpen = true
@@ -213,7 +246,7 @@ func (c ComposeModel) expandQuote() ComposeModel {
 		c.statusMsg, c.isErr = err.Error(), true
 		return c
 	}
-	quoted := strings.Split(mailapp.BuildQuote(original).ExpandedMarkdown(), "\n")
+	quoted := strings.Split(c.buildQuote(original).ExpandedMarkdown(), "\n")
 	lines = append(lines[:at], append(quoted, lines[at+1:]...)...)
 	c.expandedFrom = body
 	c.bodyInput.SetValue(strings.Join(lines, "\n"))

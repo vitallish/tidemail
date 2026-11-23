@@ -212,3 +212,66 @@ func TestQuoteImagesFlagsCarryTheOriginalsInlineImage(t *testing.T) {
 		}
 	}
 }
+
+// --forward (#20): Fwd: subject, the original's attachments, no threading, the
+// original quoted by marker (default), text or not at all.
+func TestForwardCLIBuildsAForwardWithoutThreading(t *testing.T) {
+	id := replyFixtureWith(t, `<p>Totals</p><table><tr><th>Item</th><th>Qty</th></tr><tr><td>Pens</td><td>3</td></tr></table>`,
+		db.Attachment{Filename: "budget.pdf", ContentType: "application/pdf", Data: []byte("%PDF-1.4")})
+	code, out := runHeadless(t, "draft", "create", "--forward", id, "--to", "bob@example.com", "--body", "FYI", "--json")
+	if code != 0 {
+		t.Fatalf("%d %s", code, out)
+	}
+	database, _ := db.Open()
+	defer database.Close()
+	drafts, err := database.ListDrafts("stable", "Work", "me@example.com")
+	if err != nil || len(drafts) != 1 {
+		t.Fatalf("drafts %v %v", drafts, err)
+	}
+	d := drafts[0]
+	if d.ForwardOf != "<orig@x>" || d.InReplyTo != "" || d.References != "" || d.Subject != "Fwd: Budget" || d.To != "bob@example.com" {
+		t.Errorf("forward draft: %+v", d)
+	}
+	if !strings.Contains(d.BodyText, "FYI") || !strings.Contains(d.BodyText, "⁑") || strings.Contains(d.BodyText, "Totals") {
+		t.Errorf("marker body expected, original not copied: %q", d.BodyText)
+	}
+	if len(d.Attachments) != 1 || d.Attachments[0].Filename != "budget.pdf" {
+		t.Errorf("the original's attachment must come along: %+v", d.Attachments)
+	}
+}
+
+func TestForwardCLIQuoteModesAndRefusals(t *testing.T) {
+	id := replyFixture(t)
+	if code, out := runHeadless(t, "send", "--forward", id, "--to", "bob@example.com", "--body", "FYI", "--dry-run", "--json"); code != 0 || !strings.Contains(out, "validated") {
+		t.Fatalf("marker is the default: %d %s", code, out)
+	}
+	if code, out := runHeadless(t, "draft", "create", "--forward", id, "--quote", "text", "--to", "bob@example.com", "--body", "FYI", "--json"); code != 0 {
+		t.Fatalf("%d %s", code, out)
+	}
+	database, _ := db.Open()
+	defer database.Close()
+	drafts, _ := database.ListDrafts("stable", "Work", "me@example.com")
+	if len(drafts) != 1 || !strings.Contains(drafts[0].BodyText, "---------- Forwarded message ----------") || !strings.Contains(drafts[0].BodyText, "> | Pens | 3 |") {
+		t.Errorf("text mode: %+v", drafts)
+	}
+	for args, want := range map[string]string{
+		"--forward " + id + " --in-reply-to " + id:         "cannot be combined",
+		"--forward cache:99999":                            "not_found",
+		"--forward nonsense":                               "invalid_arguments",
+		"--forward " + id + " --quote sideways":            "invalid_arguments",
+		"--forward " + id + " --quote none --quote-images": "--quote marker",
+	} {
+		code, out := runHeadless(t, append([]string{"send", "--to", "bob@example.com", "--body", "x", "--dry-run", "--json"}, strings.Fields(args)...)...)
+		if code == 0 || !strings.Contains(out, want) {
+			t.Errorf("%q: code=%d %s", args, code, out)
+		}
+	}
+}
+
+func TestForwardCLINeedsMessagesReadForAgents(t *testing.T) {
+	id := replyFixture(t)
+	code, out := runHeadless(t, "draft", "create", "--forward", id, "--to", "bob@example.com", "--body", "x", "--agent", "--json")
+	if code != 3 || !strings.Contains(out, "messages.read") {
+		t.Fatalf("agent without messages.read: code=%d %s", code, out)
+	}
+}

@@ -944,7 +944,17 @@ operators such as `dw`, `cw`, and `dd`, and a command line. `:w` sends the
 message, while `:q` cancels it.
 
 Replies and forwards quote the readable text of an HTML message, not its markup,
-and a forward keeps the original's attachments.
+and a forward keeps the original's attachments. With **Settings → Editor → Reply
+quote marker** on, a forward gets the same `⁑` quote marker as a reply: the
+forwarded message, with its tables, lists and links, is put at that line when the
+message is previewed or sent, headed by the `---------- Forwarded message ----------`
+block (From, Date, Subject, To, CC) instead of "wrote:". `F3` views it, `e` expands
+it into editable Markdown (the header block, then the `> ` quote), `F10` can include
+its inline images. The draft remembers which message it forwards (not as
+In-Reply-To, so it is not threaded into the original's conversation), so a draft
+opened later still resolves the marker, as long as the original is in the cache. The
+forwarded message's attachments are attached as before, inline images included, so
+with `F10` on a picture can appear both in the quote and as an attachment.
 
 ### Images in messages
 
