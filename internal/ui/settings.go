@@ -94,6 +94,7 @@ const (
 	sfComposeSearchRegex
 	sfComposeWordWrap
 	sfComposeTableStyle
+	sfComposePreviewServer
 	sfComposeSpell
 	sfSpellLang
 	sfSpellDictionary
@@ -373,6 +374,7 @@ type Settings struct {
 	composeVim              bool
 	composeSearchRegex      bool
 	composeWordWrap         bool
+	composePreviewServer    bool
 	composeSpell            bool
 	spellLangIdx            int
 	cliQuitAfterSend        bool
@@ -503,6 +505,7 @@ func newSettings(cfg config.Config, updateState settingsUpdateState) Settings {
 		composeVim:              cfg.Display.ComposeVim,
 		composeSearchRegex:      cfg.Display.ComposeSearchRegex,
 		composeWordWrap:         cfg.Display.ComposeWordWrap,
+		composePreviewServer:    cfg.Display.ComposePreviewServer,
 		composeSpell:            cfg.Display.ComposeSpell,
 		spellLangIdx:            spellLangIndex(cfg.Display.ComposeSpellLang),
 		cliQuitAfterSend:        cfg.Display.CLIQuitAfterSend,
@@ -604,6 +607,7 @@ func (s Settings) ApplyTo(cfg config.Config) config.Config {
 	cfg.Display.ComposeSearchRegex = s.composeSearchRegex
 	cfg.Display.ComposeWordWrap = s.composeWordWrap
 	cfg.Display.ComposeTableStyle = tableStyleValues[s.tableStyleIdx] // compose_table_css is config-file only and is left as is
+	cfg.Display.ComposePreviewServer = s.composePreviewServer
 	cfg.Display.ComposeSpell = s.composeSpell
 	cfg.Display.ComposeSpellLang = spellLangs[s.spellLangIdx].id
 	cfg.Display.CLIQuitAfterSend = s.cliQuitAfterSend
@@ -866,7 +870,7 @@ func (s Settings) sectionFields(section settingsSection) []settingsField {
 		// Keep this order in lockstep with the ssGeneral case in viewSectionBody.
 		return []settingsField{sfBackToSections, sfBrowser, sfDownloadDir, sfConfirmQuit, sfNotifications, sfMouseSupport}
 	case ssEditor:
-		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeTableStyle, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
+		return []settingsField{sfBackToSections, sfComposeVim, sfComposeWordWrap, sfComposeTableStyle, sfComposePreviewServer, sfComposeSearchRegex, sfComposeSpell, sfSpellLang, sfSpellDictionary, sfSendDelay, sfSendMaxAttempts}
 	case ssCLI:
 		return []settingsField{sfBackToSections, sfCLIQuitAfterSend, sfCLISkipReview, sfCLISignature}
 	case ssUpdates:
@@ -1666,6 +1670,15 @@ func (s Settings) Update(msg tea.Msg, keys KeyMap) (Settings, tea.Cmd, bool) {
 			s.setFocusedField(s.prevField())
 		}
 
+	case sfComposePreviewServer:
+		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
+			s.composePreviewServer = !s.composePreviewServer
+		} else if keyMatches(key, keys.Down) {
+			s.setFocusedField(s.nextField())
+		} else if keyMatches(key, keys.Up) {
+			s.setFocusedField(s.prevField())
+		}
+
 	case sfComposeSearchRegex:
 		if keyMatches(key, keys.Space) || keyMatches(key, keys.Enter) {
 			s.composeSearchRegex = !s.composeSearchRegex
@@ -2215,6 +2228,8 @@ func (s Settings) viewSectionBody(width int, chrome managerChrome) settingsSecti
 		b.markAnchor(sfComposeTableStyle)
 		b.addLine(s.renderTableStyleSelector(b.width, b.chrome))
 		b.addFieldHint(sfComposeTableStyle, s.fieldHint(sfComposeTableStyle))
+		b.addToggle("Live preview server (F4)", s.composePreviewServer, sfComposePreviewServer)
+		b.addFieldHint(sfComposePreviewServer, "F4 shows the draft in your browser and updates it as you type, served from a local port on this machine (127.0.0.1 only, secret address, stops with compose). Off: F4 writes a static file; press F4 again to refresh.")
 		b.addToggle("Advanced regex search", s.composeSearchRegex, sfComposeSearchRegex)
 		b.addFieldHint(sfComposeSearchRegex, "Shows an optional Regex toggle in compose Find. Searches stay literal until you enable it in the search bar.")
 		b.addToggle("Spell check in compose (F7)", s.composeSpell, sfComposeSpell)
