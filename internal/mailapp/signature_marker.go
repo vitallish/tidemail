@@ -42,6 +42,18 @@ func PrepareCompose(account config.AccountConfig, draft db.Draft) (smtp.Outgoing
 	return msg, nil
 }
 
+// ComposeHTML returns the HTML part that sending would produce for a draft body
+// and the account's signature, without validating recipients or sender. Sending
+// and the browser preview both come through composeBody, so they cannot differ.
+func ComposeHTML(account config.AccountConfig, body string) (string, error) {
+	sigHTML, err := signatureHTMLFor(account)
+	if err != nil {
+		return "", err
+	}
+	_, html, err := composeBody(body, account.Signature, sigHTML)
+	return html, err
+}
+
 func composeBody(body, signature, signatureHTML string) (string, string, error) {
 	var html string
 	switch strings.Count(body, SignatureMarker) {

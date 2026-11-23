@@ -78,6 +78,13 @@ All notable changes to TideMail are documented in this file.
   that Gmail honours:
   `none` (default, unchanged), `basic`, or `custom` with your own CSS in
   `compose_table_css` (config file only). See "Tables in messages" in the guide.
+- `F4` in compose (or **Preview draft in browser** in the command palette) opens the
+  HTML part of the draft in your browser exactly as it would be sent, before you
+  send it. Nothing is saved or sent, and recipients are not required. The page is
+  a static file; press `F4` again to refresh it. Optionally
+  (`compose_preview_server = true`, or **Settings → Editor → Live preview
+  server**) it is served from a loopback-only local server and updates as you
+  type, with no reload. See "Previewing a draft in the browser" in the guide.
 - Passwords, AI API keys, and OAuth refresh tokens are now actually saved to
   the macOS Keychain, via `security`, the same way Linux already uses
   `secret-tool`. Previously macOS had no working backend and every secret
