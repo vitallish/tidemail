@@ -287,6 +287,10 @@ func tagGlyph(k tagKind, icons bool) string {
 
 var tagLabels = [...]string{"REPLY", "URGENT", "IMPORTANT"}
 
+// attachmentTag marks a message that has an attachment. It is drawn like a mail
+// tag such as $HAS_CAL (a filled chip), so it stays easy to see.
+var attachmentTag = annotationTag{kind: tagMail, category: "attach"}
+
 // categoryGlyphs give each known category a single glyph for the medium
 // pill level (icon, then its ASCII fallback), chosen to evoke the category
 // at a glance: a gear for CI/PR activity, a key for security, and so on.
@@ -302,6 +306,7 @@ var categoryGlyphs = map[string][2]string{
 	"receipt":      {"▤", "#"},
 	"notification": {"◉", "B"},
 	"personal":     {"⌂", "~"},
+	"attach":       {"⊕", "+"},
 }
 
 // categoryGlyph is the medium-level glyph for a category tag: the glyph that

@@ -22,6 +22,11 @@ All notable changes to TideMail are documented in this file.
   `--no-quote-images` do the same on the command line. PNG, JPEG and GIF parts cached
   with the original, up to 5 MB; anything else keeps its alt text and never blocks a
   send. (#19)
+- **Settings → Display → Mark messages with attachments** (`show_attachment_marker`,
+  off by default) adds an `ATTACH` chip, styled like a mail tag, to messages that have an attachment.
+  Inline logos and signature parts are not counted. `messages list --json` and
+  `messages search --json` report the same answer as `attachment_marker`, next to the
+  broader `has_attachment`. (#31)
 - **Settings → General → Downloads folder** sets where saving attachments (`Ctrl+D`),
   the log and plugin reports starts. Left blank it follows `XDG_DOWNLOAD_DIR` (the
   variable, or `user-dirs.dirs`) and then `~/Downloads`. It is saved as `download_dir`

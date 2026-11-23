@@ -611,6 +611,7 @@ compose_reply_quote_images = false  # true: a reply's quote carries the original
 compose_preview_server = false  # F4 preview: true serves a live page from a local port (127.0.0.1) instead of a static file
 reply_focus_body = false  # true: Reply and Reply All start in the message body instead of the header
 # attachment_open_cmd = "zathura {file}"  # optional: program for the w key; default is the system opener
+show_attachment_marker = false  # true marks messages with an attachment in the list
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]

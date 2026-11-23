@@ -209,6 +209,7 @@ type DisplayConfig struct {
 	MouseSupport            bool   `toml:"mouse_support"`
 	FilterLinks             bool   `toml:"filter_links"`
 	ShowSender              bool   `toml:"show_sender"`
+	ShowAttachmentMarker    bool   `toml:"show_attachment_marker"` // mark messages that have a real attachment in the list; off by default
 	ThreadedConversations   bool   `toml:"threaded_conversations"`
 	ReadingWidth            int    `toml:"reading_width"`
 	AccountsWidthPercent    int    `toml:"accounts_width_percent"`

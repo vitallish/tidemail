@@ -15,36 +15,37 @@ import (
 )
 
 type Message struct {
-	ID             int64
-	MailboxID      int64
-	UID            uint32
-	MessageID      string
-	InReplyTo      string
-	References     string
-	Subject        string
-	From           string
-	To             string
-	CC             string
-	ReplyTo        string
-	Date           time.Time
-	BodyText       string
-	BodyHTML       string
-	Summary        string
-	Flags          []string
-	Read           bool
-	Starred        bool
-	HasAttachment  bool
-	Headers        string       // auth-related headers parsed from MIME
-	RawHeaders     string       // transient, not stored: the full header block as received (Received trail and all)
-	AttachmentData []Attachment // transient, not stored in messages table
-	AccountName    string       // transient, populated for cross-mailbox search results
-	MailboxName    string       // transient, populated for cross-mailbox search results
+	ID               int64
+	MailboxID        int64
+	UID              uint32
+	MessageID        string
+	InReplyTo        string
+	References       string
+	Subject          string
+	From             string
+	To               string
+	CC               string
+	ReplyTo          string
+	Date             time.Time
+	BodyText         string
+	BodyHTML         string
+	Summary          string
+	Flags            []string
+	Read             bool
+	Starred          bool
+	HasAttachment    bool
+	AttachmentMarker bool         // transient, list queries only: a real attachment, not an inline logo or a signature part (attachmentMarkerSQL)
+	Headers          string       // auth-related headers parsed from MIME
+	RawHeaders       string       // transient, not stored: the full header block as received (Received trail and all)
+	AttachmentData   []Attachment // transient, not stored in messages table
+	AccountName      string       // transient, populated for cross-mailbox search results
+	MailboxName      string       // transient, populated for cross-mailbox search results
 }
 
 func (db *DB) ListMessages(mailboxID int64) ([]Message, error) {
 	rows, err := db.Query(`
 		SELECT id, mailbox_id, uid, message_id, in_reply_to, references_text, subject, from_addr, to_addr, cc_addr,
-		       reply_to, date, body_text, body_html, summary,		flags, read, starred, has_attachment, headers
+		       reply_to, date, body_text, body_html, summary,		flags, read, starred, has_attachment, headers, `+attachmentMarkerSQL+`
 		FROM messages WHERE mailbox_id = ?
 		ORDER BY date DESC, id DESC`, mailboxID)
 	if err != nil {
@@ -57,7 +58,7 @@ func (db *DB) ListMessages(mailboxID int64) ([]Message, error) {
 func (db *DB) ListMessagesUnreadFirst(mailboxID int64) ([]Message, error) {
 	rows, err := db.Query(`
 		SELECT id, mailbox_id, uid, message_id, in_reply_to, references_text, subject, from_addr, to_addr, cc_addr,
-		       reply_to, date, body_text, body_html, summary,		flags, read, starred, has_attachment, headers
+		       reply_to, date, body_text, body_html, summary,		flags, read, starred, has_attachment, headers, `+attachmentMarkerSQL+`
 		FROM messages WHERE mailbox_id = ?
 		ORDER BY read ASC, date DESC, id DESC`, mailboxID)
 	if err != nil {
@@ -91,7 +92,7 @@ func (db *DB) OldestMessageUID(mailboxID int64) (uint32, error) {
 func (db *DB) ListUnreadMessages(mailboxID int64) ([]Message, error) {
 	rows, err := db.Query(`
 		SELECT id, mailbox_id, uid, message_id, in_reply_to, references_text, subject, from_addr, to_addr, cc_addr,
-		       reply_to, date, body_text, body_html, summary,		flags, read, starred, has_attachment, headers
+		       reply_to, date, body_text, body_html, summary,		flags, read, starred, has_attachment, headers, `+attachmentMarkerSQL+`
 		FROM messages WHERE mailbox_id = ? AND read = 0
 		ORDER BY date DESC, id DESC`, mailboxID)
 	if err != nil {
@@ -109,11 +110,25 @@ const inboxMailboxPredicate = `(
 			OR instr(lower(mailboxes.flags), '\inbox') > 0
 		)`
 
+// attachmentMarkerSQL answers "does this message carry something a person would
+// call an attachment" for the list marker. has_attachment is too broad for that:
+// parseBody sets it for any part that is not the body, so a signature logo or a
+// PGP/S-MIME signature counts. The stored flag stays as it is (the reader uses it
+// to load cid images); this expression looks at the cached parts instead. It is
+// false for a cid-referenced inline image and for signature parts, and falls back
+// to has_attachment when no parts are cached (the body has not been fetched).
+const attachmentMarkerSQL = `(messages.has_attachment = 1 AND (
+			NOT EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = messages.id)
+			OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = messages.id
+				AND NOT (a.inline = 1 AND a.content_id != '')
+				AND lower(a.content_type) NOT IN ('application/pgp-signature', 'application/pkcs7-signature', 'application/x-pkcs7-signature'))
+		)) AS attachment_marker`
+
 // messageColumns is the column list scanMessages reads, qualified by table.
 const messageColumns = `messages.id, messages.mailbox_id, messages.uid, messages.message_id,
 		       messages.in_reply_to, messages.references_text, messages.subject, messages.from_addr, messages.to_addr, messages.cc_addr,
 		       messages.reply_to, messages.date, messages.body_text, messages.body_html,
-		       messages.summary, messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers`
+		       messages.summary, messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers, ` + attachmentMarkerSQL
 
 func (db *DB) ListUnifiedInbox(unreadOnly bool) ([]Message, error) {
 	readClause := ""
@@ -124,7 +139,7 @@ func (db *DB) ListUnifiedInbox(unreadOnly bool) ([]Message, error) {
 		SELECT messages.id, messages.mailbox_id, messages.uid, messages.message_id,
 		       messages.in_reply_to, messages.references_text, messages.subject, messages.from_addr, messages.to_addr, messages.cc_addr,
 		       messages.reply_to, messages.date, messages.body_text, messages.body_html,
-		       messages.summary, messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers
+		       messages.summary, messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers, ` + attachmentMarkerSQL + `
 		FROM messages
 		JOIN mailboxes ON mailboxes.id = messages.mailbox_id
 		WHERE ` + inboxMailboxPredicate + readClause + `
@@ -145,7 +160,7 @@ func (db *DB) ListUnifiedInboxUnreadFirst(unreadOnly bool) ([]Message, error) {
 		SELECT messages.id, messages.mailbox_id, messages.uid, messages.message_id,
 		       messages.in_reply_to, messages.references_text, messages.subject, messages.from_addr, messages.to_addr, messages.cc_addr,
 		       messages.reply_to, messages.date, messages.body_text, messages.body_html,
-		       messages.summary, messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers
+		       messages.summary, messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers, ` + attachmentMarkerSQL + `
 		FROM messages
 		JOIN mailboxes ON mailboxes.id = messages.mailbox_id
 		WHERE ` + inboxMailboxPredicate + readClause + `
@@ -184,7 +199,7 @@ func (db *DB) searchAllMessages(query string, unreadFirst, unreadOnly bool, limi
 	const columns = `messages.id, messages.mailbox_id, messages.uid, messages.message_id,
 		       messages.in_reply_to, messages.references_text, messages.subject, messages.from_addr, messages.to_addr, messages.cc_addr,
 		       messages.reply_to, messages.date, messages.body_text, messages.body_html, messages.summary,
-		       messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers,
+		       messages.flags, messages.read, messages.starred, messages.has_attachment, messages.headers, ` + attachmentMarkerSQL + `,
 		       accounts.name, CASE WHEN mailboxes.delimiter = '' THEN mailboxes.name ELSE COALESCE(NULLIF(mailboxes.display_name, ''), mailboxes.name) END`
 	const joins = `
 		JOIN mailboxes ON mailboxes.id = messages.mailbox_id
@@ -518,12 +533,12 @@ func scanMessagesWithContext(rows interface {
 		var m Message
 		var flagsJSON string
 		var dateUnix int64
-		var read, starred, att int
+		var read, starred, att, marker int
 		if err := rows.Scan(
 			&m.ID, &m.MailboxID, &m.UID, &m.MessageID, &m.InReplyTo, &m.References, &m.Subject,
 			&m.From, &m.To, &m.CC, &m.ReplyTo, &dateUnix,
 			&m.BodyText, &m.BodyHTML, &m.Summary, &flagsJSON, &read, &starred, &att,
-			&m.Headers, &m.AccountName, &m.MailboxName,
+			&m.Headers, &marker, &m.AccountName, &m.MailboxName,
 		); err != nil {
 			return nil, err
 		}
@@ -534,6 +549,7 @@ func scanMessagesWithContext(rows interface {
 		m.Read = read != 0
 		m.Starred = starred != 0
 		m.HasAttachment = att != 0
+		m.AttachmentMarker = marker != 0
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
@@ -562,12 +578,12 @@ func scanMessages(rows interface {
 		var m Message
 		var flagsJSON string
 		var dateUnix int64
-		var read, starred, att int
+		var read, starred, att, marker int
 		if err := rows.Scan(
 			&m.ID, &m.MailboxID, &m.UID, &m.MessageID, &m.InReplyTo, &m.References, &m.Subject,
 			&m.From, &m.To, &m.CC, &m.ReplyTo, &dateUnix,
 			&m.BodyText, &m.BodyHTML, &m.Summary, &flagsJSON, &read, &starred, &att,
-			&m.Headers,
+			&m.Headers, &marker,
 		); err != nil {
 			return nil, err
 		}
@@ -578,6 +594,7 @@ func scanMessages(rows interface {
 		m.Read = read != 0
 		m.Starred = starred != 0
 		m.HasAttachment = att != 0
+		m.AttachmentMarker = marker != 0
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
