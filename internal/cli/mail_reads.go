@@ -44,6 +44,7 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 	unread := fs.Bool("unread", false, "Only unread messages")
 	server := fs.Bool("server", false, "search: also search the mail server and download matches not yet cached")
 	accountName := fs.String("account", "", "search --server: only this account (name or ID)")
+	attachmentN := fs.Int("attachment", 0, "messages open: attachment number from 'messages attachments' (1-based)")
 	usageOut := errOut
 	if hasHelpFlag(args) {
 		usageOut = out
@@ -52,6 +53,9 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		extra := ""
 		if command == "messages" && action == "search" {
 			extra = " [--server [--account NAME]]"
+		}
+		if command == "messages" && action == "open" {
+			extra = " --attachment N"
 		}
 		_, _ = fmt.Fprintf(usageOut, "Usage: tidemail %s %s [ID or query] [--json] [--agent] [--limit N] [--offset N]%s\nCached reads do not synchronize with the server; search --server is the exception.\nUse --interactive for guided input, or --no-interactive to suppress prompts.\n", command, action, extra)
 		if command == "outbox" {
@@ -66,7 +70,7 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		a := args[i]
 		if strings.HasPrefix(a, "-") {
 			options = append(options, a)
-			if (a == "--limit" || a == "--offset" || a == "--account") && i+1 < len(args) {
+			if (a == "--limit" || a == "--offset" || a == "--account" || a == "--attachment") && i+1 < len(args) {
 				i++
 				options = append(options, args[i])
 			}
@@ -83,8 +87,8 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 	if *limit < 1 || *limit > 1000 || *offset < 0 {
 		return fail("invalid_arguments", "--limit must be 1–1000 and --offset must be nonnegative.", 2)
 	}
-	if (command == "accounts" && action != "list") || (command == "messages" && action != "list" && action != "search" && action != "read") || (command == "outbox" && action != "list" && action != "status") {
-		hint := map[string]string{"accounts": "list", "messages": "list, search, or read", "outbox": "list or status"}[command]
+	if (command == "accounts" && action != "list") || (command == "messages" && action != "list" && action != "search" && action != "read" && action != "attachments" && action != "open") || (command == "outbox" && action != "list" && action != "status") {
+		hint := map[string]string{"accounts": "list", "messages": "list, search, read, attachments, or open", "outbox": "list or status"}[command]
 		message := fmt.Sprintf("Unknown subcommand %q; %s supports %s.", action, command, hint)
 		if command == "messages" {
 			message += ` Search with: tidemail messages search "query".`
@@ -97,7 +101,7 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 	if *accountName != "" && !*server {
 		return fail("invalid_arguments", "--account applies to --server; cached searches cover every account.", 2)
 	}
-	needsArgument := action == "read" || action == "status" || action == "search"
+	needsArgument := action == "read" || action == "status" || action == "search" || action == "attachments" || action == "open"
 	if (needsArgument && len(positionals) != 1) || (!needsArgument && len(positionals) != 0) {
 		return fail("invalid_arguments", "Provide exactly one ID or quoted search query for read, status, or search; lists take no positional arguments.", 2)
 	}
@@ -113,6 +117,12 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		}
 		if action == "search" {
 			capability = "messages.search"
+		}
+		if action == "attachments" {
+			capability = "messages.metadata"
+		}
+		if action == "open" {
+			capability = "attachments.open"
 		}
 	}
 	if *agent && !mailapp.Allowed(cfg, capability) {
@@ -194,6 +204,9 @@ func RunMailRead(command string, args []string, out, errOut io.Writer) int {
 		var accountID, accountName, mailboxName string
 		err := database.QueryRow(`SELECT accounts.config_id, accounts.name, mailboxes.name FROM mailboxes JOIN accounts ON accounts.id=mailboxes.account_id WHERE mailboxes.id=?`, m.MailboxID).Scan(&accountID, &accountName, &mailboxName)
 		return map[string]any{"id": fmt.Sprintf("cache:%d", m.ID), "cache_id": m.ID, "account_id": accountID, "account_name": accountName, "mailbox_id": m.MailboxID, "mailbox": mailboxName, "uid": m.UID, "message_id": m.MessageID, "subject": m.Subject, "from": m.From, "to": m.To, "cc": m.CC, "date": m.Date.Format(time.RFC3339), "read": m.Read, "starred": m.Starred, "has_attachment": m.HasAttachment}, err
+	}
+	if action == "attachments" || action == "open" {
+		return runAttachmentAction(database, cfg, action, positionals[0], *attachmentN, jsonMode, out, errOut)
 	}
 	if action == "read" {
 		id, e := readID(positionals[0])

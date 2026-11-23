@@ -516,6 +516,7 @@ A plugin with the `contacts_read` permission can serve as an external address bo
 | `Ctrl+U` | Unsubscribe while reading; cycle sender while composing |
 | `Ctrl+D` | Save attachments from the open message (starts in your downloads folder; set it in Settings → General) |
 | `Alt+F` / `Ctrl+R` | Attach a file while composing (built-in browser, or your own via `file_picker_cmd`); remove the last attachment |
+| `w` | Open one attachment with your default program (a list when there are several) |
 | `Ctrl+E` | Show or hide full headers |
 | `Ctrl+O` | View the message source (`c` copies it) |
 | `Ctrl+B` | View the whole message in your browser (remote content blocked) |
@@ -607,6 +608,7 @@ compose_table_style = "none"  # inline borders for Markdown tables in sent mail:
 compose_reply_marker = false    # true: replies start with a ⁑ quote marker, resolved at send time with the original's formatting (F3 views it)
 compose_preview_server = false  # F4 preview: true serves a live page from a local port (127.0.0.1) instead of a static file
 reply_focus_body = false  # true: Reply and Reply All start in the message body instead of the header
+# attachment_open_cmd = "zathura {file}"  # optional: program for the w key; default is the system opener
 images = "auto"  # "auto" (inline + blocked remote), or "off" (text placeholders)
 
 [[account]]

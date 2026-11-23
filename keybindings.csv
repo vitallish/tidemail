@@ -72,6 +72,7 @@ ViewSource,ctrl+o,ctrl+o,view message source (c copies),message list+content
 ToggleImages,i,i,load remote images (unsupported in foot/WezTerm),content
 TrustImages,I,I,always load remote images from this sender; press again to stop,content
 SaveAttach,ctrl+d,ctrl+d,save attachments,content
+OpenAttach,w,w,open attachment,content
 Add,a,a,add account,account_manager
 Edit,e,e,edit account,account_manager
 Delete,d,d,delete (messages: hidden at once, 6s undo window then server confirmation),account_manager+main
